@@ -38,11 +38,12 @@ una respuesta final, sin bucles infinitos.
 | `student_framework/tools/file_reader.py` | Herramienta 2: lector de archivos | **Nuestro** |
 | `student_framework/tools/word_counter.py` | Herramienta 3 (libre): contador de palabras | **Nuestro** |
 | `tests/test_escenarios_propios.py` | Escenarios propios (≥2 herramientas) | **Nuestro** |
+| `tests/test_herramientas.py` | Tests unitarios de las 3 herramientas (casos borde) | **Nuestro** |
 | `mia_agents/` | Tipos, protocolos y `LLMClient` de la cátedra | FIJO |
 | `tests/conformance/test_m1.py` | Tests de conformidad | FIJO |
 
-**Estado:** los 5 tests de conformidad de M1 y los 4 escenarios propios pasan
-(9/9 en verde).
+**Estado:** los 5 tests de conformidad de M1, los 5 escenarios propios y los 23
+tests unitarios de las herramientas pasan (**33/33 en verde**).
 
 ---
 
@@ -338,11 +339,16 @@ binario, etc.), de modo que ni siquiera llegan a lanzar.
 
 ## 8. Estrategia de pruebas
 
-**Conformidad (FIJO):** `tests/conformance/test_m1.py` — 5 tests que verifican el
-contrato mínimo con el `MockLLMClient`.
+La estrategia tiene **tres capas**: el contrato del agente (conformidad), el
+bucle del agente con varias herramientas (escenarios) y la lógica de cada
+herramienta aislada (unitarios).
 
-**Escenarios propios:** `tests/test_escenarios_propios.py` — 4 escenarios
-deterministas (sin API), guionando las respuestas del mock:
+**1. Conformidad (FIJO):** `tests/conformance/test_m1.py` — 5 tests que verifican
+el contrato mínimo con el `MockLLMClient`.
+
+**2. Escenarios propios:** `tests/test_escenarios_propios.py` — 5 escenarios
+deterministas (sin API), guionando las respuestas del mock. Prueban el **bucle
+del agente**:
 
 1. **Leer archivo + contar palabras** — dos herramientas encadenadas.
 2. **Calculadora + contador** — dos herramientas distintas en una conversación.
@@ -350,8 +356,20 @@ deterministas (sin API), guionando las respuestas del mock:
    se recupera con una real.
 4. **Corte por `max_iterations`** — el LLM nunca para; el agente corta en 10
    llamadas y devuelve un `AgentResult` válido.
+5. **Calculadora con división** — verifica el operador `/` en el flujo del agente.
 
-Resultado: **9/9 tests en verde**.
+**3. Tests unitarios de las herramientas:** `tests/test_herramientas.py` — 23
+tests que ejercitan cada herramienta **de forma aislada**, con foco en casos
+borde y ramas de error que los escenarios no cubren:
+
+- **Calculadora:** los cinco operadores, división/módulo por cero, operador
+  inválido, salida siempre `str`.
+- **Lector de archivos:** archivo inexistente, ruta = directorio, binario
+  (no UTF-8), archivo > 100 KB, lectura correcta con acentos.
+- **Contador de palabras:** texto normal, vacío, solo espacios, espacios
+  múltiples, saltos de línea y tabs.
+
+Resultado: **33/33 tests en verde**.
 
 ---
 
@@ -359,8 +377,9 @@ Resultado: **9/9 tests en verde**.
 
 ```bash
 # Tests (no requieren clave de API; usan MockLLMClient)
-pytest tests/conformance/test_m1.py
-pytest tests/test_escenarios_propios.py
+pytest tests/conformance/test_m1.py        # contrato del agente (cátedra)
+pytest tests/test_escenarios_propios.py    # bucle del agente con >=2 tools
+pytest tests/test_herramientas.py          # unitarios de las herramientas
 
 # Agente contra un LLM real (requiere proveedor configurado, ver README)
 python -m mia_agents.cli run --module student_framework \

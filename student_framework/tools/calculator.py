@@ -1,9 +1,11 @@
 """Herramienta obligatoria 1 (M1): calculadora simple.
 
-Contrato del enunciado (ENUNCIADO_M1.md, sección "1. Calculadora simple"):
+Contrato del enunciado (sección "1. Calculadora simple"):
 
-  - Entrada: dos operandos numéricos y un operador.
-  - Operadores soportados: ``+``, ``-``, ``*``, ``%`` (módulo).
+  - Entrada: dos operandos numéricos y un operador (string).
+  - Operadores soportados: ``+``, ``-``, ``*``, ``/`` (división) y ``%`` (módulo).
+    Se soportan los cinco para cubrir las dos versiones del enunciado (una pide
+    ``/`` y otra ``%``); ambos son operaciones binarias simples.
   - Salida: el resultado de la operación, como ``str``.
   - Sin ``eval`` y sin expresiones arbitrarias: solo la operación binaria
     indicada.
@@ -34,8 +36,13 @@ _OPERACIONES = {
     "+": lambda a, b: a + b,  # suma
     "-": lambda a, b: a - b,  # resta
     "*": lambda a, b: a * b,  # multiplicación
+    "/": lambda a, b: a / b,  # división
     "%": lambda a, b: a % b,  # módulo (resto de la división entera)
 }
+
+# Operadores cuya operación no está definida cuando el segundo operando es 0
+# (división y módulo). Se interceptan antes de aplicar la operación.
+_DIVIDEN_POR_CERO = {"/", "%"}
 
 
 def calculadora(
@@ -49,15 +56,15 @@ def calculadora(
     ],
     operador: Annotated[
         str,
-        Field(description="Operador a aplicar. Uno de: '+', '-', '*', '%'."),
+        Field(description="Operador a aplicar. Uno de: '+', '-', '*', '/', '%'."),
     ],
 ) -> str:
     """Calcula una operación aritmética binaria entre dos números.
 
     Usá esta herramienta cuando necesites resolver una cuenta simple entre dos
-    números: suma ('+'), resta ('-'), multiplicación ('*') o módulo ('%').
-    Devuelve el resultado como texto. No evalúa expresiones completas: solo la
-    operación binaria indicada por ``operador``.
+    números: suma ('+'), resta ('-'), multiplicación ('*'), división ('/') o
+    módulo ('%'). Devuelve el resultado como texto. No evalúa expresiones
+    completas: solo la operación binaria indicada por ``operador``.
     """
     # Validación defensiva del operador: si el LLM alucina un símbolo que no
     # soportamos (p. ej. '/' o '^'), devolvemos un mensaje de error en vez de
@@ -66,11 +73,11 @@ def calculadora(
         soportados = ", ".join(_OPERACIONES.keys())
         return f"Error: operador no soportado '{operador}'. Use uno de: {soportados}."
 
-    # El módulo por cero (igual que la división por cero) no está definido;
-    # lo interceptamos para devolver un error claro en lugar de propagar la
-    # excepción ``ZeroDivisionError``.
-    if operador == "%" and operando_b == 0:
-        return "Error: módulo por cero."
+    # La división y el módulo por cero no están definidos; los interceptamos
+    # para devolver un error claro en lugar de propagar ``ZeroDivisionError``.
+    if operador in _DIVIDEN_POR_CERO and operando_b == 0:
+        nombre = "división" if operador == "/" else "módulo"
+        return f"Error: {nombre} por cero."
 
     # Aplicamos la operación elegida y devolvemos el resultado como string,
     # tal como exige el contrato (la salida de toda herramienta es ``str``).

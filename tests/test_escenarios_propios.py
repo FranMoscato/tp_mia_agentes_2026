@@ -112,6 +112,29 @@ def test_escenario_calculadora_y_conteo() -> None:
     assert result.answer == "El resto es 2 y la frase tiene 3 palabras."
 
 
+def test_escenario_calculadora_division() -> None:
+    """La calculadora soporta división ('/') además de módulo ('%')."""
+    mock = MockLLMClient(
+        [
+            LLMResponse(
+                content=None,
+                tool_calls=[
+                    _tool_call("c1", "calculadora", operando_a=10, operando_b=4, operador="/")
+                ],
+            ),
+            LLMResponse(content="10 / 4 = 2.5."),
+        ]
+    )
+
+    agent = build_agent({"llm_client": mock})
+    result = agent.run("¿Cuánto es 10 dividido 4?")
+
+    assert result.steps[0].tool_name == "calculadora"
+    assert result.steps[0].tool_output == "2.5"   # 10 / 4
+    assert result.steps[0].error is None
+    assert result.answer == "10 / 4 = 2.5."
+
+
 def test_escenario_recuperacion_ante_tool_desconocida() -> None:
     """Robustez: el LLM alucina una herramienta inexistente y luego se recupera.
 

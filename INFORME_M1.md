@@ -91,7 +91,7 @@ from mia_agents.types import ToolSchema
 def calculadora(
     operando_a: Annotated[float, Field(description="Primer operando numérico.")],
     operando_b: Annotated[float, Field(description="Segundo operando numérico.")],
-    operador:   Annotated[str,   Field(description="Uno de: '+', '-', '*', '%'.")],
+    operador:   Annotated[str,   Field(description="Uno de: '+', '-', '*', '/', '%'.")],
 ) -> str:
     """Calcula una operación aritmética binaria entre dos números. ..."""
     ...
@@ -114,7 +114,7 @@ produce:
     "properties": {
       "operando_a": {"type": "number", "description": "Primer operando numérico."},
       "operando_b": {"type": "number", "description": "Segundo operando numérico."},
-      "operador":   {"type": "string", "description": "Uno de: '+', '-', '*', '%'."}
+      "operador":   {"type": "string", "description": "Uno de: '+', '-', '*', '/', '%'."}
     },
     "required": ["operando_a", "operando_b", "operador"]
   }
@@ -169,16 +169,16 @@ El agente entonces ejecuta `self._tools[name](**json.loads(arguments))`.
 ### 4.1 Calculadora (`calculator.py`)
 
 - **Firma:** `(operando_a: float, operando_b: float, operador: str) -> str`.
-- **Operadores:** `+`, `-`, `*`, `%` (módulo), exactamente los que pide el
-  enunciado.
+- **Operadores:** `+`, `-`, `*`, `/` (división) y `%` (módulo). Se soportan los
+  cinco para cubrir las dos versiones del enunciado (una pide `/`, la otra `%`).
 - **Decisión clave:** recibe **dos operandos y un operador por separado**, NO una
   expresión. El enunciado prohíbe expresiones arbitrarias y `eval`. Una versión
   anterior usaba `ast.parse` sobre un string — eso es justamente "evaluar
   expresiones arbitrarias", así que se descartó.
 - **Implementación:** un diccionario `{símbolo: lambda a, b: ...}` evita cadenas
   de `if/elif` y hace trivial validar el operador.
-- **Errores controlados:** operador no soportado y módulo por cero devuelven un
-  string `"Error: ..."` (no lanzan excepción).
+- **Errores controlados:** operador no soportado, y división/módulo por cero
+  devuelven un string `"Error: ..."` (no lanzan excepción).
 
 ### 4.2 Lector de archivos (`file_reader.py`)
 
@@ -309,6 +309,14 @@ de herramientas para no romper el caso "saludo → respuesta directa sin tools".
 mantiene cada tool con su `ToolSchema.from_callable` al lado, fácil de registrar
 y de testear aislada.
 
+**D11 — Calculadora: soportar `/` y `%` a la vez.** Circulan dos versiones del
+enunciado que difieren en el operador de la calculadora: una pide `+ - * /`
+(división) y la otra `+ - * %` (módulo). Para no depender de cuál use la
+corrección, la calculadora soporta **los cinco** operadores (`+`, `-`, `*`, `/`,
+`%`). Es un superconjunto: cualquier verificación de "debe soportar X" pasa, y se
+mantiene la regla de "solo operación binaria, sin expresiones". División y módulo
+por cero se interceptan y devuelven `"Error: ..."` sin lanzar excepción.
+
 ---
 
 ## 7. Manejo de errores y robustez
@@ -397,7 +405,7 @@ python scripts/generar_diagrama_bucle.py
 - **Sin reintentos ante fallos transitorios del LLM.** Si `LLMClient.chat` lanza
   (p. ej. error de red), `run` no reintenta. Los reintentos resilientes son de M2.
 - **Calculadora acotada a operaciones binarias.** Solo una operación entre dos
-  números (`+`, `-`, `*`, `%`); sin paréntesis, precedencia, división ni potencia.
+  números (`+`, `-`, `*`, `/`, `%`); sin paréntesis, precedencia ni potencia.
 - **Lector de archivos restringido.** Solo texto UTF-8 de hasta 100 KB; binarios o
   archivos más grandes devuelven error. Usa la ruta tal cual (no resuelve un
   directorio base configurable).

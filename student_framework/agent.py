@@ -14,7 +14,7 @@ from __future__ import annotations
 from typing import Any, Callable
 
 from mia_agents.protocols import LLMClient
-from mia_agents.types import AgentResult, ToolSchema, AgentStep
+from mia_agents.types import AgentResult, AgentStep, LLMResponse, ToolCall, ToolSchema
 import json
 
 SYSTEM_PROMPT = """
@@ -91,118 +91,165 @@ class MyAgent:
     def run(self, user_message: str) -> AgentResult:
         """Ejecuta el bucle del agente hasta una respuesta final o hasta max_iterations.
 
-        Comportamiento esperado (consulta tests/conformance/test_m1.py
+        Comportamiento (ver tests/conformance/test_m1.py y ENUNCIADO_M1.md
         para el contrato exacto del M1):
           - Llama a `self._llm.chat(..., tools=list(self._schemas.values()))`.
-          - Si la respuesta contiene tool_calls, ejecuta cada uno y vuelca
-            los resultados en la siguiente llamada al chat.
-          - Si la respuesta solo contiene texto (sin `tool_calls`),
-            devuélvelo en `AgentResult.answer`. En M1 no uses la tool
-            sintética `final_result`; ese patrón es de M2 (ver README y
-            ENUNCIADO_M2.md).
-          - Limita el bucle a `self._max_iterations` y termina de forma
-            limpia cuando se alcance.
-          - Registra cada invocación de herramienta como un `AgentStep`
-            dentro de `result.steps`.
+          - Si la respuesta contiene `tool_calls`, ejecuta cada uno, vuelca
+            sus resultados en la conversación y vuelve a llamar al LLM.
+          - Si la respuesta NO contiene `tool_calls`, su `content` es la
+            respuesta final (`AgentResult.answer`). En M1 no se usa la tool
+            sintética `final_result` (eso es M2).
+          - El bucle hace como máximo `self._max_iterations` llamadas al LLM
+            y termina de forma limpia al alcanzar ese tope.
+          - Cada invocación de herramienta se registra como un `AgentStep`.
+          - `run` nunca lanza excepción: los errores (herramienta
+            desconocida, argumentos inválidos, fallo de la herramienta) se
+            capturan y quedan reflejados en el `AgentStep.error`
+            correspondiente.
 
-        En el M2, además, llamadas sucesivas sobre la misma instancia
-        deben continuar la conversación, y la longitud de la lista de
-        mensajes enviada al LLM no debe superar `self._max_history_messages`.
-        Acumula los tokens de entrada/salida reportados por los
-        `LLMResponse` y exponlos en `AgentResult.input_tokens` /
-        `AgentResult.output_tokens`.
+        En M2, además, llamadas sucesivas continúan la conversación y la
+        lista de mensajes no supera `self._max_history_messages`.
         """
+        # Resultado que iremos completando. `answer` arranca vacío (string,
+        # nunca None) y los tokens en None: solo se vuelven números si algún
+        # LLMResponse reporta tokens (ver _acumular_tokens).
+        resultado = AgentResult(answer="")
 
-        #Creamos elemento de respuesta final del agente
-        respuesta_final=AgentResult(answer="")
-        respuesta_final.input_tokens=0
-        respuesta_final.output_tokens=0
-        count_llamados=1
-
-        #Mensaje inicial del usuario
-        messages = [
+        # Historial de la conversación. En M1 arranca con el mensaje del
+        # usuario; el system prompt se pasa aparte vía el parámetro `system`.
+        messages: list[dict[str, Any]] = [
             {"role": "user", "content": user_message}
         ]
 
+        # Esquemas de las herramientas a exponer al LLM (None si no hay
+        # ninguna registrada; el contrato pide que en la primera llamada
+        # `tools` no sea None cuando hay herramientas).
+        tools = list(self._schemas.values()) if self._schemas else None
+
+        # --- Primera llamada al LLM ---------------------------------------
         response = self._llm.chat(
             messages=messages,
-            tools=list(self._schemas.values()) if self._schemas else None,
+            tools=tools,
             system=self._system,
         )
+        self._acumular_tokens(resultado, response)
 
-        if respuesta_final.input_tokens and respuesta_final.output_tokens:
-            respuesta_final.input_tokens+=response.input_tokens
-            respuesta_final.output_tokens+=response.output_tokens
+        # Contamos las llamadas ya realizadas al LLM. Empezamos en 1 porque
+        # arriba ya hicimos una. El tope total es `self._max_iterations`.
+        llamadas = 1
 
-        while not response.content and count_llamados<10:
-            ### Agregamos LLM message a contexto
-            messages.append({"role": "assistant", "content": response.content,
-                            "tool_calls": [
-                            {
-                                "function": {
-                                    "name": call.name,
-                                    "arguments": json.loads(call.arguments),
-                                }
-                            }
-                            for call in response.tool_calls],
-                            })
-
-            ### Corremos las tools
-            for call in response.tool_calls:
-                args = json.loads(call.arguments)
-
-                ### Caso de tools desconocidas
-                if call.name not in self._tools:
-                    messages.append({
-                        "role": "tool",
-                        "content": f"Error: herramienta desconocida '{call.name}'."
-                    })
-
-                    respuesta_final.steps.append(
-                        AgentStep(
-                            tool_name=call.name,
-                            tool_input=call.arguments,
-                            tool_output=None,
-                            error=f"Herramienta desconocida: {call.name}"
-                        )
-                    )
-                    continue
-
-                ### Para las tools conocidas
-                tool_result = self._tools[call.name](**args)
-                messages.append({"role": "tool",  "content": f"Tool: {call.name}\nResult: {tool_result}"})
-                
-                step = AgentStep(
-                    tool_name=call.name,
-                    tool_input=call.arguments,
-                    tool_output=None,
-                    error=None
-                    )
-                
-                if str(tool_result).startswith("Error:"):
-                    step.error = str(tool_result)
-                
-                else:
-                    step.tool_output=str(tool_result)
-                
-                respuesta_final.steps.append(step)
-
-            response = self._llm.chat(
-                messages=messages,
-                tools=list(self._schemas.values()) if self._schemas else None,
-                system=self._system,
+        # --- Bucle: mientras el LLM pida herramientas y haya presupuesto ---
+        # La condición de corte del M1 es "el LLM respondió sin tool_calls".
+        # Por eso iteramos mientras HAYA tool_calls (y no superemos el tope).
+        while response.tool_calls and llamadas < self._max_iterations:
+            # 1) Registrar en el historial el turno del assistant con los
+            #    tool_calls que pidió. Incluimos el `id` de cada llamada para
+            #    que los proveedores reales (Bedrock) puedan correlacionar
+            #    cada toolUse con su toolResult.
+            messages.append(
+                {
+                    "role": "assistant",
+                    "content": response.content or "",
+                    "tool_calls": [
+                        {
+                            "id": call.id,
+                            "function": {
+                                "name": call.name,
+                                "arguments": call.arguments,
+                            },
+                        }
+                        for call in response.tool_calls
+                    ],
+                }
             )
 
+            # 2) Ejecutar cada herramienta pedida y volcar su resultado.
+            for call in response.tool_calls:
+                tool_output, error = self._ejecutar_tool(call)
 
-            if respuesta_final.input_tokens and respuesta_final.output_tokens:
-                respuesta_final.input_tokens+=response.input_tokens
-                respuesta_final.output_tokens+=response.output_tokens
-                
-            count_llamados+=1
+                # El resultado (o el error) debe volver al LLM como contexto
+                # antes de la próxima llamada. Usamos rol "tool" y repetimos
+                # el `tool_call_id` para que coincida con el toolUse anterior.
+                contenido_tool = tool_output if error is None else error
+                messages.append(
+                    {
+                        "role": "tool",
+                        "tool_call_id": call.id,
+                        "content": contenido_tool,
+                    }
+                )
 
-        respuesta_final.answer=response.content
+                # Registrar exactamente un AgentStep por herramienta invocada.
+                resultado.steps.append(
+                    AgentStep(
+                        tool_name=call.name,
+                        tool_input=call.arguments,
+                        tool_output=tool_output,
+                        error=error,
+                    )
+                )
 
-        return respuesta_final
+            # 3) Nueva llamada al LLM con el historial actualizado.
+            response = self._llm.chat(
+                messages=messages,
+                tools=tools,
+                system=self._system,
+            )
+            self._acumular_tokens(resultado, response)
+            llamadas += 1
+
+        # Respuesta final: el último `content`. Si el bucle cortó por tope de
+        # iteraciones con la última respuesta sin texto, `content` puede ser
+        # None; lo normalizamos a "" para respetar el tipo `str` de `answer`.
+        resultado.answer = response.content or ""
+        return resultado
+
+    def _ejecutar_tool(self, call: ToolCall) -> tuple[str | None, str | None]:
+        """Ejecuta una herramienta de forma segura.
+
+        Devuelve una tupla `(tool_output, error)`:
+          - En éxito: `(salida_str, None)`.
+          - En fallo: `(None, mensaje_de_error)`.
+
+        Captura los tres modos de fallo posibles para que `run` nunca lance
+        excepción:
+          1. Herramienta inexistente (el LLM alucinó un nombre).
+          2. Argumentos que no son JSON válido.
+          3. Excepción al ejecutar el callable de la herramienta.
+        """
+        # 1) Herramienta desconocida.
+        if call.name not in self._tools:
+            return None, f"Herramienta desconocida: '{call.name}'."
+
+        # 2) Parseo de argumentos (vienen como string JSON).
+        try:
+            args = json.loads(call.arguments) if call.arguments else {}
+        except json.JSONDecodeError as exc:
+            return None, f"Argumentos JSON inválidos para '{call.name}': {exc}."
+
+        # 3) Ejecución del callable. Cualquier excepción se convierte en error
+        #    registrado, sin romper el bucle del agente.
+        try:
+            salida = self._tools[call.name](**args)
+            return str(salida), None
+        except Exception as exc:  # noqa: BLE001 — robustez: capturamos todo
+            return None, f"Error al ejecutar '{call.name}': {exc}."
+
+    @staticmethod
+    def _acumular_tokens(resultado: AgentResult, response: LLMResponse) -> None:
+        """Suma los tokens de un `LLMResponse` al `AgentResult`.
+
+        Los contadores quedan en None mientras ningún `LLMResponse` reporte
+        tokens; en cuanto uno reporta, se inicializan en 0 y se acumulan
+        (tratando los None por respuesta como 0). Esto cumple el contrato de
+        `AgentResult` descrito en `mia_agents/types.py`.
+        """
+        if response.input_tokens is not None:
+            resultado.input_tokens = (resultado.input_tokens or 0) + response.input_tokens
+        if response.output_tokens is not None:
+            resultado.output_tokens = (
+                resultado.output_tokens or 0
+            ) + response.output_tokens
 
     def structured_call(
         self,

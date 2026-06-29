@@ -19,6 +19,7 @@
 9. [Cómo ejecutar](#9-cómo-ejecutar)
 10. [Trazabilidad contrato → implementación](#10-trazabilidad-contrato--implementación)
 11. [Limitaciones conocidas](#11-limitaciones-conocidas)
+12. [Anexo: corrida real contra Ollama](#12-anexo-corrida-real-contra-ollama)
 
 ---
 
@@ -434,3 +435,82 @@ python scripts/generar_diagrama_bucle.py
 - **Tokens dependientes del proveedor.** `input_tokens`/`output_tokens` solo se
   completan si el proveedor los reporta; con `MockLLMClient` sin tokens quedan en
   `None`.
+
+---
+
+## 12. Anexo: corrida real contra Ollama
+
+Además de los tests con `MockLLMClient`, ejecutamos el agente contra un **modelo
+real** vía Ollama (`qwen2.5:3b`, que soporta tool-use) para validar el flujo
+end-to-end. Comando:
+
+```bash
+export OLLAMA_HOST="http://localhost:11434"
+export OLLAMA_MODEL="qwen2.5:3b"
+python -m mia_agents.cli run --module student_framework \
+  --message "¿Cuánto es 17 * 23? Usá la calculadora."
+```
+
+### Corrida 1 — una herramienta (calculadora)
+
+```json
+{
+  "answer": "El resultado de 17 * 23 es 391.",
+  "steps": [
+    {
+      "tool_name": "calculadora",
+      "tool_input": "{\"operando_a\": 17, \"operando_b\": 23, \"operador\": \"*\"}",
+      "tool_output": "391",
+      "error": null
+    }
+  ],
+  "error": null,
+  "input_tokens": 1447,
+  "output_tokens": 55
+}
+```
+
+El modelo decidió usar la herramienta, pasó los argumentos correctos, y los
+tokens se acumularon (algo que el mock no ejercita).
+
+### Corrida 2 — dos herramientas encadenadas (lector → contador)
+
+Mensaje: *"Primero usá la herramienta leer_archivo para leer frase_demo.txt.
+Después pasá ese contenido a la herramienta contar_palabras. Decime el número
+final."*
+
+```json
+{
+  "answer": "El texto contiene 13 palabras.",
+  "steps": [
+    {
+      "tool_name": "leer_archivo",
+      "tool_input": "{\"ruta\": \"frase_demo.txt\"}",
+      "tool_output": "Las herramientas le dan al agente capacidades que el modelo no tiene solo\n",
+      "error": null
+    },
+    {
+      "tool_name": "contar_palabras",
+      "tool_input": "{\"texto\": \"Las herramientas le dan al agente capacidades que el modelo no tiene solo\"}",
+      "tool_output": "13",
+      "error": null
+    }
+  ],
+  "error": null,
+  "input_tokens": 2326,
+  "output_tokens": 123
+}
+```
+
+El agente encadenó las dos herramientas: leyó el archivo, pasó su contenido al
+contador y produjo la respuesta final. Dos `AgentStep`, ambos exitosos.
+
+### Observaciones (refuerzan la sección 11)
+
+- Con un modelo **chico (3B)**, el encadenamiento de herramientas es frágil: con
+  una instrucción genérica ("leé y contá") a veces **no llama** a la segunda
+  herramienta y cuenta él mismo (mal); con una instrucción explícita sí encadena.
+  Es una limitación del **modelo**, no del framework.
+- Ante una **ruta larga**, el modelo de 3B la transcribió mal (cambió una letra).
+  La herramienta devolvió `"Error: ... no existe"` y el agente lo comunicó sin
+  romperse — evidencia real del manejo de errores descrito en la sección 7.

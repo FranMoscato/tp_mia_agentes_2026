@@ -34,6 +34,11 @@ def build_agent(config: dict[str, Any] | None = None) -> Agent:
     if "max_history_messages" in config:
         kwargs["max_history_messages"] = config["max_history_messages"]
 
+    # Permitimos configurar también el tope de iteraciones desde config, por si
+    # la corrección quiere fijar un límite distinto al default (10).
+    if "max_iterations" in config:
+        kwargs["max_iterations"] = config["max_iterations"]
+
     agent = MyAgent(**kwargs)
 
     # Registro de las tres herramientas obligatorias del M1. Cada una se

@@ -34,10 +34,27 @@ def build_agent(config: dict[str, Any] | None = None) -> Agent:
     if "max_history_messages" in config:
         kwargs["max_history_messages"] = config["max_history_messages"]
 
+    # Permitimos configurar también el tope de iteraciones desde config, por si
+    # la corrección quiere fijar un límite distinto al default (10).
+    if "max_iterations" in config:
+        kwargs["max_iterations"] = config["max_iterations"]
+
     agent = MyAgent(**kwargs)
 
-    # Registro de herramientas:
-    from student_framework.tools.calculator import Calculator, calcualtor_schema
-    agent.register_tool(Calculator, calcualtor_schema)
+    # Registro de las tres herramientas obligatorias del M1. Cada una se
+    # importa con su callable y su ToolSchema (derivado con
+    # ToolSchema.from_callable en el propio módulo de la herramienta) y se
+    # registra en el agente. A partir de acá quedan expuestas al LLM en cada
+    # llamada a chat(tools=...).
+    from student_framework.tools.calculator import calculadora, calculadora_schema
+    from student_framework.tools.file_reader import leer_archivo, leer_archivo_schema
+    from student_framework.tools.word_counter import (
+        contar_palabras,
+        contar_palabras_schema,
+    )
+
+    agent.register_tool(calculadora, calculadora_schema)        # 1. calculadora
+    agent.register_tool(leer_archivo, leer_archivo_schema)      # 2. lector de archivos
+    agent.register_tool(contar_palabras, contar_palabras_schema)  # 3. herramienta libre
 
     return agent

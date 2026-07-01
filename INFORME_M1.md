@@ -20,6 +20,7 @@
 10. [Trazabilidad contrato → implementación](#10-trazabilidad-contrato--implementación)
 11. [Limitaciones conocidas](#11-limitaciones-conocidas)
 12. [Anexo: corrida real contra Ollama](#12-anexo-corrida-real-contra-ollama)
+13. [Anexo: corrida real contra AWS Bedrock (Amazon Nova)](#13-anexo-corrida-real-contra-aws-bedrock-amazon-nova)
 
 ---
 
@@ -514,3 +515,47 @@ contador y produjo la respuesta final. Dos `AgentStep`, ambos exitosos.
 - Ante una **ruta larga**, el modelo de 3B la transcribió mal (cambió una letra).
   La herramienta devolvió `"Error: ... no existe"` y el agente lo comunicó sin
   romperse — evidencia real del manejo de errores descrito en la sección 7.
+
+---
+
+## 13. Anexo: corrida real contra AWS Bedrock (Amazon Nova)
+
+Complementando el anexo de Ollama, ejecutamos el mismo agente contra **AWS Bedrock**
+con el modelo `amazon.nova-lite-v1:0` (vía la API Converse), para validar que el
+framework es **agnóstico del proveedor**. Config (credenciales temporales SSO en
+`~/.aws/credentials`, resto en `.env`):
+
+```bash
+export BEDROCK_MODEL_ID="amazon.nova-lite-v1:0"
+export AWS_REGION="us-east-1"
+export AWS_PROFILE="882885365928_udesasbx_IsbUsersPS"
+python -m mia_agents.cli run --message "¿Cuánto es 17 * 23? Usá la calculadora."
+```
+
+### Corridas — las tres herramientas obligatorias
+
+| Herramienta | Mensaje | `tool_output` | Resultado |
+|---|---|---|---|
+| `calculadora` | `144 / 12` | `12.0` | ✅ tool llamada, args correctos |
+| `leer_archivo` | leer un `.txt` y devolver la 1ª línea | contenido del archivo | ✅ leyó y extrajo bien |
+| `contar_palabras` | contar palabras de una frase de 6 | `6` | ✅ (ver nota de intermitencia) |
+
+Las tres funcionan end-to-end contra Bedrock, igual que con Ollama. El `LLMClient`
+fijo traduce cada `ToolSchema` al formato `toolSpec` de Converse sin que el agente
+cambie una línea.
+
+### Observaciones (refuerzan la sección 11)
+
+- **Fallo intermitente de tool-calling en `nova-lite`**: en una primera corrida de
+  `contar_palabras`, el modelo emitió la llamada **como texto plano**
+  (`[{"contar_palabras": {"texto": ...}}]`) en vez de un bloque `toolUse` nativo. El
+  bucle no lo detectó como herramienta y `steps` quedó vacío. Al **reintentar 3
+  veces, las 3 funcionaron** → es un hiccup **no determinístico del modelo**, no del
+  framework. Con un modelo mayor (`nova-pro`) o la resiliencia de M2 se mitigaría.
+- **Fuga de razonamiento**: Nova incluye bloques `<thinking>...</thinking>` (y a
+  veces `<response>...</response>`) dentro del `answer`. Es cosmético; con
+  qwen2.5:3b no ocurría. Limpiarlo sería una mejora de post-procesamiento en el
+  agente.
+- **Portabilidad confirmada**: el mismo `student_framework` corrió sin cambios
+  contra dos proveedores (Ollama local y Bedrock cloud), validando la abstracción
+  `LLMClient` de la sección 2.

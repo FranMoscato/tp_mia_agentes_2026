@@ -15,6 +15,7 @@ from typing import Any, Callable
 
 from mia_agents.protocols import LLMClient
 from mia_agents.types import AgentResult, AgentStep, LLMResponse, ToolCall, ToolSchema
+from mia_agents.tool_schema import final_result_tool_schema,FINAL_RESULT_TOOL_NAME
 import json
 
 SYSTEM_PROMPT = """
@@ -286,13 +287,10 @@ class MyAgent:
         schema: Any,
         max_repair_attempts: int = 2,
     ) -> Any:
-        """Pide al LLM una respuesta validada contra `schema` (M2).
+        """Pide al LLM una respuesta validada contra `schema`.
 
-        Obligatorio: herramienta sintética `final_result` (ver
-        `mia_agents.final_result_tool_schema` / `FINAL_RESULT_TOOL_NAME`).
-        El agente ofrece esa tool al LLM, valida los `arguments` del
-        `tool_call` y reintenta con contexto de reparación si el modelo
-        responde con texto libre o con argumentos inválidos.
+        Obligatorio: herramienta sintética `final_result`. El agente ofrece esa tool al LLM, valida los `arguments` del
+        `tool_call` y reintenta con contexto de reparación si el modelo responde con texto libre o con argumentos inválidos.
 
         Implementa esto en el M2:
           - Pasa `tools=[final_result_tool_schema(schema)]` en cada
@@ -307,4 +305,122 @@ class MyAgent:
 
         El M1 deja esto como stub; los tests de M2 verifican el contrato.
         """
-        raise NotImplementedError("M2: implementa salida estructurada con reparación")
+
+        messages = [
+        {
+            "role": "user",
+            "content": prompt,
+        }]
+
+        tool = final_result_tool_schema(schema)
+
+        for attempt in range(max_repair_attempts + 1):
+
+            response = self._llm.chat(
+                messages=messages,
+                tools=[tool], #CHEQUEAR SI ES NECESARIO TAMBIER PASSARLE LAS OTRAS TOOLS
+                system=self._system,
+            )
+
+            # CASO 1: modelo responde con texto libre
+            if not response.tool_calls:
+
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": response.content or "",
+                    }
+                )
+
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            "La respuesta no cumple el formato requerido. Se debe utilizar unicamente la herramienta final_result."
+                        ),
+                    }
+                )
+                continue
+
+
+            # CASO 2: Buscamos la tool final_result. Se termina solo cuando llega un `tool_call` a `final_result`
+            final_call = None
+
+            for call in response.tool_calls:
+                if call.name == FINAL_RESULT_TOOL_NAME:
+                    final_call = call
+                    break
+
+
+            if final_call is None:
+
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": response.content or "",
+                        "tool_calls": [
+                            {
+                                "id": c.id,
+                                "function": {
+                                    "name": c.name,
+                                    "arguments": c.arguments,
+                                },
+                            }
+                            for c in response.tool_calls
+                        ],
+                    }
+                )
+
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            "Debes finalizar utilizando la herramienta final_result."
+                        ),
+                    }
+                )
+
+                continue
+
+
+            # Caso 3: Se responde con argumentos invalidos
+
+            try:
+                arguments = json.loads(final_call.arguments)
+
+                return schema.model_validate(arguments)
+
+            except Exception as exc:
+
+                last_error = str(exc)
+
+                messages.append(
+                    {
+                        "role": "assistant",
+                        "content": response.content or "",
+                        "tool_calls": [
+                            {
+                                "id": final_call.id,
+                                "function": {
+                                    "name": final_call.name,
+                                    "arguments": final_call.arguments,
+                                },
+                            }
+                        ],
+                    }
+                )
+
+                messages.append(
+                    {
+                        "role": "user",
+                        "content": (
+                            "Los argumentos enviados a final_result "
+                            "no cumplen el schema esperado.\n"
+                            f"Error: {last_error}\n"
+                            "Corrige la respuesta usando final_result."
+                        ),
+                    }
+                )
+
+        raise RuntimeError(f"No se pudo obtener una respuesta estructurada valida")
+

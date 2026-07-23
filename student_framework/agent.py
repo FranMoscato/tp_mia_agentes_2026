@@ -20,15 +20,15 @@ import json
 SYSTEM_PROMPT = """
 Sos un asistente útil, amable y conversacional. Respondé siempre en español.
 
-Disponés de herramientas que pueden ayudarte a resolver tareas específicas.
-Utilizalas únicamente cuando sean necesarias para responder correctamente.
+Disponés de herramientas que pueden ayudarte a resolver tareas específicas. Utilizalas únicamente cuando sean necesarias para responder correctamente.
 
 Reglas:
 
 1. Si el usuario hace una pregunta o un pedido explícito, respondelo directamente.
-2. Solo utilizá herramientas cuando sean necesarias.
+2. Solo utilizá herramientas cuando sean necesarias. Chequea que la respuesta no este en contexto previo o tu conocimiento general
 3. Si el usuario únicamente saluda o no hace ningún pedido o pregunta, saludalo y preguntale en qué podés ayudarlo.
 4. Sé claro, conciso y cordial en todas tus respuestas.
+5. La información mencionada por el usuario en mensajes anteriores forma parte del contexto disponible. No utilices herramientas para recuperar información que ya aparece en la conversación.
 """
 
 
@@ -64,8 +64,8 @@ class MyAgent:
         self._max_iterations = max_iterations
         self._max_history_messages = max_history_messages
         self._tools={} 
-        self._schemas={} 
-        # TODO (M2): inicializa la estructura de historial conversacional.
+        self._schemas={}
+        self.messages: list[dict[str, Any]] = []
 
     def register_tool(
         self,
@@ -110,43 +110,33 @@ class MyAgent:
         En M2, además, llamadas sucesivas continúan la conversación y la
         lista de mensajes no supera `self._max_history_messages`.
         """
-        # Resultado que iremos completando. `answer` arranca vacío (string,
-        # nunca None) y los tokens en None: solo se vuelven números si algún
-        # LLMResponse reporta tokens (ver _acumular_tokens).
+
         resultado = AgentResult(answer="")
-
-        # Historial de la conversación. En M1 arranca con el mensaje del
-        # usuario; el system prompt se pasa aparte vía el parámetro `system`.
-        messages: list[dict[str, Any]] = [
-            {"role": "user", "content": user_message}
-        ]
-
-        # Esquemas de las herramientas a exponer al LLM (None si no hay
-        # ninguna registrada; el contrato pide que en la primera llamada
-        # `tools` no sea None cuando hay herramientas).
+        self.messages.append({"role": "user", "content": user_message})
+        
+        # Esquemas de las herramientas a exponer al LLM
         tools = list(self._schemas.values()) if self._schemas else None
 
+        
+
         # --- Primera llamada al LLM ---------------------------------------
+
+        self._apply_sliding_window()
         response = self._llm.chat(
-            messages=messages,
+            messages=self.messages,
             tools=tools,
             system=self._system,
         )
         self._acumular_tokens(resultado, response)
 
-        # Contamos las llamadas ya realizadas al LLM. Empezamos en 1 porque
-        # arriba ya hicimos una. El tope total es `self._max_iterations`.
+        # Contamos las llamadas ya realizadas al LLM. El tope total es `self._max_iterations`.
         llamadas = 1
 
-        # --- Bucle: mientras el LLM pida herramientas y haya presupuesto ---
-        # La condición de corte del M1 es "el LLM respondió sin tool_calls".
-        # Por eso iteramos mientras HAYA tool_calls (y no superemos el tope).
+        # iteramos mientras HAYA tool_calls (y no superemos el tope).
         while response.tool_calls and llamadas < self._max_iterations:
-            # 1) Registrar en el historial el turno del assistant con los
-            #    tool_calls que pidió. Incluimos el `id` de cada llamada para
-            #    que los proveedores reales (Bedrock) puedan correlacionar
-            #    cada toolUse con su toolResult.
-            messages.append(
+
+            # Registrar en el historial el turno del assistant con los tool_calls que pidio.
+            self.messages.append(
                 {
                     "role": "assistant",
                     "content": response.content or "",
@@ -163,15 +153,14 @@ class MyAgent:
                 }
             )
 
-            # 2) Ejecutar cada herramienta pedida y volcar su resultado.
+            # Ejecutar cada herramienta pedida y guardar su resultado.
             for call in response.tool_calls:
                 tool_output, error = self._ejecutar_tool(call)
 
                 # El resultado (o el error) debe volver al LLM como contexto
-                # antes de la próxima llamada. Usamos rol "tool" y repetimos
-                # el `tool_call_id` para que coincida con el toolUse anterior.
+
                 contenido_tool = tool_output if error is None else error
-                messages.append(
+                self.messages.append(
                     {
                         "role": "tool",
                         "tool_call_id": call.id,
@@ -189,20 +178,60 @@ class MyAgent:
                     )
                 )
 
+            
             # 3) Nueva llamada al LLM con el historial actualizado.
+            self._apply_sliding_window()
             response = self._llm.chat(
-                messages=messages,
+                messages=self.messages,
                 tools=tools,
                 system=self._system,
             )
             self._acumular_tokens(resultado, response)
             llamadas += 1
 
-        # Respuesta final: el último `content`. Si el bucle cortó por tope de
-        # iteraciones con la última respuesta sin texto, `content` puede ser
-        # None; lo normalizamos a "" para respetar el tipo `str` de `answer`.
+        #Guardamos en mensajes la ultima respuesta del LLM
+        self.messages.append(
+                {
+                    "role": "assistant",
+                    "content": response.content or "",
+                    "tool_calls": [
+                        {
+                            "id": call.id,
+                            "function": {
+                                "name": call.name,
+                                "arguments": call.arguments,
+                            },
+                        }
+                        for call in response.tool_calls
+                    ],
+                }
+            )
+
+        # Respuesta final: el último `content`.
         resultado.answer = response.content or ""
         return resultado
+    
+    def _apply_sliding_window(self) -> None:
+        """Mantiene el primer turno y elimina turnos completos antiguos."""
+
+        while len(self.messages) > self._max_history_messages:
+
+            # Si solo queda el primer turno no hay nada más para borrar.
+            if len(self.messages) <= 2:
+                break
+
+            # El segundo turno siempre empieza en el segundo mensaje "user". Va a ser mayor a 1 porq el primer turno por lo menos va a ser "user-asistant"
+            start = 1
+
+            # Buscar el siguiente mensaje de usuario
+            end = len(self.messages)
+            for i in range(start + 1, len(self.messages)):
+                if self.messages[i]["role"] == "user":
+                    end = i
+                    break
+
+            # Elimina todo el turno
+            del self.messages[start:end]
 
     def _ejecutar_tool(self, call: ToolCall) -> tuple[str | None, str | None]:
         """Ejecuta una herramienta de forma segura.

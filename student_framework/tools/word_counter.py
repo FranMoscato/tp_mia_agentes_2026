@@ -32,6 +32,8 @@ def contar_palabras(
     texto. Una "palabra" es cualquier secuencia de caracteres separada por
     espacios en blanco (espacios, tabulaciones o saltos de línea). El texto
     vacío o de solo espacios cuenta como 0 palabras.
+
+    No utilices esta funcion cuando no se requiera saber el largo de un texto
     """
     # ``str.split()`` sin argumentos divide por cualquier cantidad de espacios
     # en blanco consecutivos y descarta los extremos, así que cadenas vacías o

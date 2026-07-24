@@ -17,10 +17,6 @@ operación binaria pedida.
 """
 
 from __future__ import annotations
-
-# ``Annotated`` permite adjuntar metadatos (el ``Field`` de Pydantic) a cada
-# parámetro de la firma. ``ToolSchema.from_callable`` lee esos metadatos para
-# construir el JSON Schema que se le ofrece al LLM.
 from typing import Annotated
 
 from pydantic import Field
@@ -65,16 +61,15 @@ def calculadora(
     números: suma ('+'), resta ('-'), multiplicación ('*'), división ('/') o
     módulo ('%'). Devuelve el resultado como texto. No evalúa expresiones
     completas: solo la operación binaria indicada por ``operador``.
+
+    Los parametros operando_a y operando_b deben ser pasados como float (no string)
     """
-    # Validación defensiva del operador: si el LLM alucina un símbolo que no
-    # soportamos (p. ej. '/' o '^'), devolvemos un mensaje de error en vez de
-    # lanzar una excepción. Así la herramienta nunca rompe el bucle del agente.
+    # Validación defensiva del operador así la herramienta nunca rompe el bucle del agente.
     if operador not in _OPERACIONES:
         soportados = ", ".join(_OPERACIONES.keys())
         return f"Error: operador no soportado '{operador}'. Use uno de: {soportados}."
 
-    # La división y el módulo por cero no están definidos; los interceptamos
-    # para devolver un error claro en lugar de propagar ``ZeroDivisionError``.
+    # La división y el módulo por cero no están definidos
     if operador in _DIVIDEN_POR_CERO and operando_b == 0:
         nombre = "división" if operador == "/" else "módulo"
         return f"Error: {nombre} por cero."
@@ -85,8 +80,4 @@ def calculadora(
     return str(resultado)
 
 
-# El esquema se deriva automáticamente de la firma + docstring de la función.
-# Nunca se escribe el JSON Schema a mano (lo exige el enunciado). El nombre del
-# esquema queda como "calculadora" (el nombre de la función), que es claro para
-# el LLM.
 calculadora_schema = ToolSchema.from_callable(calculadora)

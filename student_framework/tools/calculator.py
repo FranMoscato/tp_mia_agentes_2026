@@ -64,15 +64,51 @@ def calculadora(
 
     Los parametros operando_a y operando_b deben ser pasados como float (no string)
     """
-    # Validación defensiva del operador así la herramienta nunca rompe el bucle del agente.
+    # --- Errores recuperables (M2): mensajes accionables para que el LLM
+    # pueda corregir los argumentos y reintentar. -------------------------
+
+    # 1) Operandos no numéricos: indicamos QUÉ parámetro falló, QUÉ valor
+    #    llegó y CÓMO debe verse uno válido. Si llega un string que
+    #    representa un número ("42", "2.5") lo convertimos en lugar de
+    #    fallar: es un error de formato trivial que no amerita otra vuelta.
+    operandos: dict[str, float] = {}
+    for nombre, valor in (("operando_a", operando_a), ("operando_b", operando_b)):
+        if isinstance(valor, bool) or not isinstance(valor, (int, float, str)):
+            return (
+                f"Error: el parámetro '{nombre}' recibió {valor!r} "
+                f"(tipo {type(valor).__name__}), que no es numérico. "
+                "Enviá un número, por ejemplo 3 o 2.5."
+            )
+        if isinstance(valor, str):
+            # String numérico ("42", "2.5"): lo convertimos en vez de fallar.
+            try:
+                valor = float(valor)
+            except ValueError:
+                return (
+                    f"Error: el parámetro '{nombre}' recibió {valor!r}, que no "
+                    "se puede interpretar como número. Enviá un valor numérico, "
+                    "por ejemplo 3 o 2.5 (sin unidades ni texto adicional)."
+                )
+        operandos[nombre] = valor
+    operando_a = operandos["operando_a"]
+    operando_b = operandos["operando_b"]
+
+    # 2) Operador no soportado: listamos los permitidos.
     if operador not in _OPERACIONES:
         soportados = ", ".join(_OPERACIONES.keys())
-        return f"Error: operador no soportado '{operador}'. Use uno de: {soportados}."
+        return (
+            f"Error: operador no soportado '{operador}'. "
+            f"Usá exactamente uno de estos símbolos: {soportados}."
+        )
 
-    # La división y el módulo por cero no están definidos
+    # 3) División y módulo por cero: explicamos la restricción concreta.
     if operador in _DIVIDEN_POR_CERO and operando_b == 0:
         nombre = "división" if operador == "/" else "módulo"
-        return f"Error: {nombre} por cero."
+        return (
+            f"Error: la {nombre} no está definida cuando el segundo operando "
+            f"es 0 ('operando_b' recibió 0). Reintenta con un 'operando_b' "
+            "distinto de cero, o revisá si la operación pedida es otra."
+        )
 
     # Aplicamos la operación elegida y devolvemos el resultado como string,
     # tal como exige el contrato (la salida de toda herramienta es ``str``).

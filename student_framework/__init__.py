@@ -39,6 +39,13 @@ def build_agent(config: dict[str, Any] | None = None) -> Agent:
     if "max_iterations" in config:
         kwargs["max_iterations"] = config["max_iterations"]
 
+    # Parámetros de resiliencia (M2): reintentos ante fallos transitorios.
+    # `retry_backoff_base=0` permite tests rápidos sin sleeps.
+    if "max_retries" in config:
+        kwargs["max_retries"] = config["max_retries"]
+    if "retry_backoff_base" in config:
+        kwargs["retry_backoff_base"] = config["retry_backoff_base"]
+
     agent = MyAgent(**kwargs)
 
     # Registro de las tres herramientas obligatorias del M1. Cada una se

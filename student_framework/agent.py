@@ -11,12 +11,55 @@ Los tests de conformidad en `tests/conformance/test_m1.py` y
 
 from __future__ import annotations
 
+import time
 from typing import Any, Callable
 
 from mia_agents.protocols import LLMClient
 from mia_agents.types import AgentResult, AgentStep, LLMResponse, ToolCall, ToolSchema
 from mia_agents.tool_schema import final_result_tool_schema,FINAL_RESULT_TOOL_NAME
 import json
+
+# ---------------------------------------------------------------------------
+# Resiliencia: clasificación de errores transitorios
+# ---------------------------------------------------------------------------
+
+# Marcadores (case-insensitive) que identifican fallos transitorios en el
+# nombre de la excepción o en su mensaje. Cubren timeouts, rate limits /
+# throttling y errores 5xx de los proveedores (Bedrock lanza ClientError con
+# códigos como "ThrottlingException" o "ServiceUnavailableException"; los
+# clientes HTTP suelen incluir el status code en el mensaje).
+_MARCADORES_TRANSITORIOS = (
+    "timeout",
+    "timed out",
+    "throttl",
+    "rate limit",
+    "ratelimit",
+    "too many requests",
+    "429",
+    "500",
+    "502",
+    "503",
+    "504",
+    "service unavailable",
+    "serviceunavailable",
+    "internal server error",
+    "internalserror",
+    "connection",
+    "temporarily",
+)
+
+
+def _es_error_transitorio(exc: Exception) -> bool:
+    """Decide si una excepción amerita reintento.
+
+    Transitorios: timeouts, errores de red/conexión, rate limits y 5xx.
+    Cualquier otro error (bug de programación, argumentos inválidos, 4xx
+    que no sea rate limit) NO se reintenta: debe aflorar limpio.
+    """
+    if isinstance(exc, (TimeoutError, ConnectionError)):
+        return True
+    texto = f"{type(exc).__name__} {exc}".lower()
+    return any(marca in texto for marca in _MARCADORES_TRANSITORIOS)
 
 SYSTEM_PROMPT = """
 Sos un asistente útil, amable y conversacional. Respondé siempre en español.
@@ -40,6 +83,8 @@ class MyAgent:
         system_prompt: str = SYSTEM_PROMPT,
         max_iterations: int = 10,
         max_history_messages: int = 50,
+        max_retries: int = 3,
+        retry_backoff_base: float = 0.5,
     ) -> None:
         """Inicializa el agente.
 
@@ -59,12 +104,20 @@ class MyAgent:
             lista de mensajes pasada a `self._llm.chat(...)` no puede
             superar este número en ninguna llamada, sin importar la
             estrategia de memoria que elijan.
+        max_retries : int
+            Cantidad máxima de reintentos ante fallos transitorios
+            (timeouts, 5xx, rate limits) en llamadas al LLM y a las tools.
+        retry_backoff_base : float
+            Espera base (en segundos) del backoff exponencial entre
+            reintentos: base * 2**intento. Poner 0 en tests.
         """
         self._llm = llm_client
         self._system = system_prompt
         self._max_iterations = max_iterations
         self._max_history_messages = max_history_messages
-        self._tools={} 
+        self._max_retries = max_retries
+        self._retry_backoff_base = retry_backoff_base
+        self._tools={}
         self._schemas={}
         self.messages: list[dict[str, Any]] = []
 
@@ -122,12 +175,7 @@ class MyAgent:
 
         # --- Primera llamada al LLM ---------------------------------------
 
-        self._apply_sliding_window()
-        response = self._llm.chat(
-            messages=self.messages,
-            tools=tools,
-            system=self._system,
-        )
+        response = self._chat_con_reintentos(tools)
         self._acumular_tokens(resultado, response)
 
         # Contamos las llamadas ya realizadas al LLM. El tope total es `self._max_iterations`.
@@ -181,58 +229,103 @@ class MyAgent:
 
             
             # 3) Nueva llamada al LLM con el historial actualizado.
-            self._apply_sliding_window()
-            response = self._llm.chat(
-                messages=self.messages,
-                tools=tools,
-                system=self._system,
-            )
+            response = self._chat_con_reintentos(tools)
             self._acumular_tokens(resultado, response)
             llamadas += 1
 
-        #Guardamos en mensajes la ultima respuesta del LLM
+        # Guardamos en el historial la última respuesta del LLM. Solo
+        # incluimos `tool_calls` si realmente los hay (si el bucle terminó
+        # por max_iterations la respuesta podría traer tool_calls sin
+        # ejecutar; los omitimos para no dejar tool_calls huérfanos, sin
+        # su mensaje `tool` de respuesta, en el historial).
         self.messages.append(
-                {
-                    "role": "assistant",
-                    "content": response.content or "",
-                    "tool_calls": [
-                        {
-                            "id": call.id,
-                            "function": {
-                                "name": call.name,
-                                "arguments": call.arguments,
-                            },
-                        }
-                        for call in response.tool_calls
-                    ],
-                }
-            )
+            {
+                "role": "assistant",
+                "content": response.content or "",
+            }
+        )
 
         # Respuesta final: el último `content`.
         resultado.answer = response.content or ""
         return resultado
-    
-    def _apply_sliding_window(self) -> None:
-        """Mantiene el primer turno y elimina turnos completos antiguos."""
 
-        while len(self.messages) > self._max_history_messages:
+    def _chat_con_reintentos(self, tools: list[ToolSchema] | None) -> LLMResponse:
+        """Llama a `chat` con la ventana de historial y reintentos."""
+        ventana = self._windowed_messages()
+        return self._con_reintentos(
+            lambda: self._llm.chat(
+                messages=ventana,
+                tools=tools,
+                system=self._system,
+            )
+        )
 
-            # Si solo queda el primer turno no hay nada más para borrar.
-            if len(self.messages) <= 2:
-                break
+    def _windowed_messages(self) -> list[dict[str, Any]]:
+        """Devuelve una COPIA del historial recortada al presupuesto.
 
-            # El segundo turno siempre empieza en el segundo mensaje "user". Va a ser mayor a 1 porq el primer turno por lo menos va a ser "user-asistant"
-            start = 1
+        Estrategia de memoria: sliding window por recencia. Conservamos la
+        cola más reciente del historial y descartamos lo más antiguo.
+        Justificación: en una conversación el contexto útil se concentra en
+        los últimos turnos; los turnos viejos son los de menor valor
+        esperado y son los que sacrificamos al quedarnos sin presupuesto.
 
-            # Buscar el siguiente mensaje de usuario
-            end = len(self.messages)
-            for i in range(start + 1, len(self.messages)):
-                if self.messages[i]["role"] == "user":
-                    end = i
-                    break
+        Invariantes que garantiza:
+          - La lista devuelta nunca supera `max_history_messages`.
+          - El mensaje de usuario más reciente SIEMPRE está incluido
+            (recencia), aunque el presupuesto sea menor que el turno actual.
+          - La ventana nunca arranca con mensajes `tool` o `assistant`
+            huérfanos (siempre empieza en un mensaje `user`), para no
+            enviar tool_calls sin contexto a proveedores estrictos.
 
-            # Elimina todo el turno
-            del self.messages[start:end]
+        Devuelve una lista NUEVA: el historial interno (`self.messages`)
+        nunca se comparte mutable con el cliente LLM.
+        """
+        n = self._max_history_messages
+        msgs = self.messages
+
+        if len(msgs) <= n:
+            ventana = list(msgs)
+        else:
+            ventana = list(msgs[len(msgs) - n:])
+
+            # Recencia: si el turno actual (tool calls mediante) es más largo
+            # que el presupuesto, la cola podría no contener ningún mensaje
+            # de usuario. Forzamos la inclusión del último mensaje de usuario.
+            if not any(m.get("role") == "user" for m in ventana):
+                idx_user = max(
+                    (i for i, m in enumerate(msgs) if m.get("role") == "user"),
+                    default=None,
+                )
+                if idx_user is not None:
+                    ventana = [msgs[idx_user]] + list(msgs[len(msgs) - (n - 1):])
+
+        # La ventana siempre empieza en un mensaje de usuario: descartamos
+        # mensajes `tool`/`assistant` que quedaron sin su turno completo.
+        while ventana and ventana[0].get("role") != "user":
+            ventana.pop(0)
+
+        return ventana
+
+    def _con_reintentos(self, fn: Callable[[], Any]) -> Any:
+        """Ejecuta `fn` reintentando solo ante fallos transitorios.
+
+        Reintenta hasta `max_retries` veces con backoff exponencial
+        (base * 2**intento). Los errores NO transitorios se propagan de
+        inmediato, sin reintentos. Si se agotan los reintentos, se propaga
+        el último error transitorio.
+        """
+        ultimo_error: Exception | None = None
+        for intento in range(self._max_retries + 1):
+            try:
+                return fn()
+            except Exception as exc:  # noqa: BLE001 — clasificamos abajo
+                if not _es_error_transitorio(exc):
+                    raise
+                ultimo_error = exc
+                if intento < self._max_retries and self._retry_backoff_base > 0:
+                    time.sleep(self._retry_backoff_base * (2 ** intento))
+        assert ultimo_error is not None
+        raise ultimo_error
 
     def _ejecutar_tool(self, call: ToolCall) -> tuple[str | None, str | None]:
         """Ejecuta una herramienta de forma segura.
@@ -257,10 +350,12 @@ class MyAgent:
         except json.JSONDecodeError as exc:
             return None, f"Argumentos JSON inválidos para '{call.name}': {exc}."
 
-        # 3) Ejecución del callable. Cualquier excepción se convierte en error
-        #    registrado, sin romper el bucle del agente.
+        # 3) Ejecución del callable, con reintentos ante fallos transitorios
+        #    (p. ej. una tool que hace red y sufre un timeout). Cualquier
+        #    excepción restante se convierte en error registrado, sin romper
+        #    el bucle del agente.
         try:
-            salida = self._tools[call.name](**args)
+            salida = self._con_reintentos(lambda: self._tools[call.name](**args))
             return str(salida), None
         except Exception as exc:  # noqa: BLE001 — robustez: capturamos todo
             return None, f"Error al ejecutar '{call.name}': {exc}."
@@ -316,10 +411,15 @@ class MyAgent:
 
         for attempt in range(max_repair_attempts + 1):
 
-            response = self._llm.chat(
-                messages=messages,
-                tools=[tool], #CHEQUEAR SI ES NECESARIO TAMBIER PASSARLE LAS OTRAS TOOLS
-                system=self._system,
+            # Solo exponemos `final_result`: acá no queremos que el LLM use
+            # otras tools, queremos forzar la salida estructurada. La llamada
+            # va envuelta en reintentos ante fallos transitorios.
+            response = self._con_reintentos(
+                lambda: self._llm.chat(
+                    messages=messages,
+                    tools=[tool],
+                    system=self._system,
+                )
             )
 
             # CASO 1: modelo responde con texto libre

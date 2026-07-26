@@ -72,47 +72,89 @@ def test_calculadora_siempre_devuelve_string() -> None:
 
 # ---------------------------------------------------------------------------
 # Lector de archivos
+#
+# Desde M2 el lector opera dentro de un SANDBOX: las rutas son relativas a un
+# directorio raíz configurable. El fixture `sandbox` apunta esa raíz a
+# `tmp_path` y la restaura al terminar cada test.
 # ---------------------------------------------------------------------------
 
-def test_leer_archivo_existente(tmp_path) -> None:
+from student_framework.tools.file_reader import get_sandbox_root, set_sandbox_root
+
+
+@pytest.fixture()
+def sandbox(tmp_path):
+    """Fija el sandbox del lector en `tmp_path` y lo restaura al salir."""
+    anterior = get_sandbox_root()
+    set_sandbox_root(tmp_path)
+    yield tmp_path
+    set_sandbox_root(anterior)
+
+
+def test_leer_archivo_existente(sandbox) -> None:
     """Lee y devuelve el contenido exacto de un archivo de texto UTF-8."""
-    archivo = tmp_path / "saludo.txt"
     contenido = "hola\nmundo áéí"  # incluye acentos para validar UTF-8
-    archivo.write_text(contenido, encoding="utf-8")
+    (sandbox / "saludo.txt").write_text(contenido, encoding="utf-8")
 
-    assert leer_archivo(str(archivo)) == contenido
+    assert leer_archivo("saludo.txt") == contenido
 
 
-def test_leer_archivo_inexistente(tmp_path) -> None:
-    """Una ruta que no existe devuelve un error, no lanza excepción."""
-    resultado = leer_archivo(str(tmp_path / "no_existe.txt"))
+def test_leer_archivo_inexistente_lista_disponibles(sandbox) -> None:
+    """Una ruta que no existe devuelve error y lista los archivos del directorio."""
+    (sandbox / "notas.txt").write_text("hola", encoding="utf-8")
+
+    resultado = leer_archivo("no_existe.txt")
     assert resultado.startswith("Error:")
     assert "no existe" in resultado
+    assert "notas.txt" in resultado  # M2: mensaje accionable con alternativas
 
 
-def test_leer_archivo_directorio(tmp_path) -> None:
-    """Si la ruta es un directorio (no un archivo), devuelve error."""
-    resultado = leer_archivo(str(tmp_path))
+def test_leer_archivo_directorio_lista_contenido(sandbox) -> None:
+    """Si la ruta es un directorio, lo dice y lista su contenido."""
+    subdir = sandbox / "datos"
+    subdir.mkdir()
+    (subdir / "informe.txt").write_text("x", encoding="utf-8")
+
+    resultado = leer_archivo("datos")
     assert resultado.startswith("Error:")
-    assert "no es un archivo" in resultado
+    assert "directorio" in resultado
+    assert "informe.txt" in resultado  # M2: mensaje accionable con contenido
 
 
-def test_leer_archivo_binario(tmp_path) -> None:
+def test_leer_archivo_ruta_vacia(sandbox) -> None:
+    """Una ruta vacía explica la regla y muestra un ejemplo válido."""
+    resultado = leer_archivo("")
+    assert resultado.startswith("Error:")
+    assert "vacía" in resultado
+
+
+def test_leer_archivo_ruta_absoluta(sandbox) -> None:
+    """Las rutas absolutas están prohibidas por el sandbox."""
+    resultado = leer_archivo(str(sandbox / "algo.txt"))
+    assert resultado.startswith("Error:")
+    assert "absoluta" in resultado
+
+
+def test_leer_archivo_ruta_con_punto_punto(sandbox) -> None:
+    """Las rutas con '..' están prohibidas porque escapan del sandbox."""
+    resultado = leer_archivo("../fuera.txt")
+    assert resultado.startswith("Error:")
+    assert ".." in resultado
+
+
+def test_leer_archivo_binario(sandbox) -> None:
     """Un archivo binario (no UTF-8) devuelve error en vez de romper."""
-    archivo = tmp_path / "datos.bin"
-    archivo.write_bytes(b"\xff\xfe\x00\x01binario")  # bytes no decodificables
+    (sandbox / "datos.bin").write_bytes(b"\xff\xfe\x00\x01binario")
 
-    resultado = leer_archivo(str(archivo))
+    resultado = leer_archivo("datos.bin")
     assert resultado.startswith("Error:")
     assert "UTF-8" in resultado
 
 
-def test_leer_archivo_demasiado_grande(tmp_path) -> None:
+def test_leer_archivo_demasiado_grande(sandbox) -> None:
     """Un archivo que supera el tope (100 KB) devuelve error y no se carga."""
-    archivo = tmp_path / "grande.txt"
-    archivo.write_text("x" * 200_000, encoding="utf-8")  # > 100 KB
+    (sandbox / "grande.txt").write_text("x" * 200_000, encoding="utf-8")
 
-    resultado = leer_archivo(str(archivo))
+    resultado = leer_archivo("grande.txt")
     assert resultado.startswith("Error:")
     assert "grande" in resultado
 

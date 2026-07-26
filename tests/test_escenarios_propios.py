@@ -43,16 +43,21 @@ def test_escenario_leer_archivo_y_contar_palabras(tmp_path) -> None:
       Turno 2 -> con el contenido leído, usa `contar_palabras`.
       Turno 3 -> responde en texto con el total.
     """
-    # Creamos un archivo de texto temporal con 5 palabras conocidas.
+    # Creamos un archivo de texto temporal con 5 palabras conocidas y
+    # apuntamos el sandbox del lector a `tmp_path` (M2: rutas relativas).
+    from student_framework.tools.file_reader import get_sandbox_root, set_sandbox_root
+
     archivo = tmp_path / "nota.txt"
     archivo.write_text("hola mundo esto es prueba", encoding="utf-8")
+    sandbox_anterior = get_sandbox_root()
+    set_sandbox_root(tmp_path)
 
     mock = MockLLMClient(
         [
-            # Turno 1: el LLM pide leer el archivo.
+            # Turno 1: el LLM pide leer el archivo (ruta relativa al sandbox).
             LLMResponse(
                 content=None,
-                tool_calls=[_tool_call("c1", "leer_archivo", ruta=str(archivo))],
+                tool_calls=[_tool_call("c1", "leer_archivo", ruta="nota.txt")],
             ),
             # Turno 2: el LLM pide contar las palabras del contenido leído.
             LLMResponse(
@@ -80,6 +85,9 @@ def test_escenario_leer_archivo_y_contar_palabras(tmp_path) -> None:
     assert result.answer == "El archivo tiene 5 palabras."
     # Hubo 3 llamadas al LLM (2 con tool_calls + 1 final).
     assert mock.call_count == 3
+
+    # Restauramos el sandbox para no afectar a otros tests.
+    set_sandbox_root(sandbox_anterior)
 
 
 def test_escenario_calculadora_y_conteo() -> None:

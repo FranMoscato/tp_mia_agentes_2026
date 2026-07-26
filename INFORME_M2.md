@@ -22,13 +22,23 @@ Lo implementado:
 - **Errores recuperables accionables** en la calculadora y el lector de archivos.
 - **Tracking de tokens** acumulado por `run`.
 
-**Estado de los tests:** `97 passed` — los 7 de conformidad de M2
-(`tests/conformance/test_m2.py`) más la suite propia
-(`tests/test_m2_propios.py`, 13 casos).
+**Estado de los tests:** toda la suite local pasa — **97 tests en verde**
+(excluyendo M3, que requiere el paquete `mia_world`, no presente en el repo). De
+esos 97, **20 son de M2**: 7 de conformidad (`tests/conformance/test_m2.py`) + 13
+propios (`tests/test_m2_propios.py`). Si se excluyen los **33 tests de los
+proveedores LLM** (`test_ollama_provider` + `test_bedrock_provider`, que validan
+el cliente fijo `mia_agents/llm_client.py`, no código de M2), quedan **64 tests**
+del framework del alumno + contrato.
 
 ```bash
+# Toda la suite local (97): excluye solo M3
 pytest -q --ignore=tests/conformance/test_m3_world.py
 # 97 passed
+
+# Solo el código del alumno (64): además excluye los tests de proveedores
+pytest -q --ignore=tests/conformance/test_m3_world.py \
+  --ignore=tests/test_ollama_provider.py --ignore=tests/test_bedrock_provider.py
+# 64 passed
 ```
 
 **Archivos nuevos/modificados respecto de M1:**
@@ -319,6 +329,24 @@ permite proyectar el gasto real de una conversación.
 
 Todos usan `MockLLMClient` determinista (sin credenciales), por lo que corren en
 cualquier máquina.
+
+**Conteo de la suite (sin M3):**
+
+| Grupo | Archivos | Tests |
+|---|---|---|
+| Conformidad M1 | `conformance/test_m1.py` | 5 |
+| Conformidad M2 | `conformance/test_m2.py` | 7 |
+| Herramientas | `test_herramientas.py` | 26 |
+| Escenarios propios M1 | `test_escenarios_propios.py` | 5 |
+| Propios M2 | `test_m2_propios.py` | 13 |
+| Tool schema | `test_tool_schema.py` | 8 |
+| **Subtotal (código del alumno + contrato)** | | **64** |
+| Proveedores LLM (cliente fijo) | `test_ollama_provider.py` + `test_bedrock_provider.py` | 33 |
+| **Total** | | **97** |
+
+Reportamos **97** como "toda la suite local en verde"; **64** es el subconjunto
+que ejercita el código del alumno, excluyendo los **33 tests de proveedores** que
+validan el cliente LLM fijo (fuera del alcance de M2).
 
 ---
 

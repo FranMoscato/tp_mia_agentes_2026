@@ -95,7 +95,15 @@ frente los `tool`/`assistant` que hayan quedado sin su turno completo
 Elegimos recencia pura porque en una conversación el contexto útil se concentra
 en los últimos turnos; los viejos son los de menor valor esperado y son los
 primeros que sacrificamos al quedarnos sin presupuesto. Ventajas: simple,
-determinista y O(n). Tradeoffs asumidos **deliberadamente**:
+determinista y O(n).
+
+Acotar el historial no es solo por costo o por el límite duro de la ventana:
+**más contexto no es mejor contexto**. Dos resultados lo respaldan: *Lost in the
+Middle* (Liu et al., 2023) muestra que la atención degrada con la posición —los
+datos en el medio de un contexto largo se "pierden"—, y *Context Rot*
+(Jaroslawicz et al., 2025) que llenar la ventana diluye la atención aunque todo
+"entre". Una ventana de recencia mantiene el contexto chico y fresco, que es
+donde el modelo rinde mejor. Tradeoffs asumidos **deliberadamente**:
 
 - **No hay summarization ni offload/retrieve.** Si el usuario referencia algo
   dicho muy atrás y ese turno ya salió de la ventana, esa información se pierde.
@@ -203,6 +211,13 @@ La idea no es solo "no crashear", sino distinguir los fallos **recuperables** (e
 LLM puede corregir los argumentos y reintentar) y devolver un mensaje
 **accionable**.
 
+El principio de fondo es **errores como observaciones**: un error de herramienta
+no rompe el bucle, vuelve al agente como un `tool` message más y el modelo lee ese
+mensaje en la iteración siguiente para corregir por su cuenta. Un mensaje
+accionable (qué falló, por qué, cómo debería verse la entrada válida) es lo que
+habilita esa **autocorrección**; un `"Error"` genérico no. Los dos ejemplos de
+abajo son exactamente ese comportamiento.
+
 ### 6.1 Calculadora ([calculator.py](student_framework/tools/calculator.py))
 
 | Error recuperable | Qué devuelve |
@@ -255,6 +270,11 @@ lo hace, se inicializan en 0 y se acumulan, tratando los `None` por respuesta co
 0. Cubierto por los tests de conformidad `test_token_accounting` y
 `test_token_accounting_treats_missing_values_as_zero_after_first_report`.
 
+Contar `input` y `output` por separado sirve para **estimar el costo** de cada
+`run`: los proveedores cobran distinto por token de entrada y de salida (la salida
+suele ser varias veces más cara), así que sumar ambos por separado es lo que
+permite proyectar el gasto real de una conversación.
+
 ---
 
 ## 8. Estrategia de pruebas
@@ -273,6 +293,16 @@ cualquier máquina.
 
 ## 9. Modos de fallo: dentro vs. fuera de alcance
 
+Las defensas de M2 se ordenan según **dónde nace** cada modo de falla. Cada una
+tiene su mecanismo, y todos los presentados en este informe caen en una de las
+tres filas:
+
+| Modo de falla | Dónde nace | Defensa (sección) |
+|---|---|---|
+| **Output malformado** | en el LLM | `structured_call` con `final_result` + validación Pydantic + reparación (§4) |
+| **Tool que falla** | en el mundo externo | reintento ante transitorios + error accionable como observación (§5, §6) |
+| **Contexto que crece** | en el historial, con el tiempo | sliding window con recencia + tracking de tokens (§3, §7) |
+
 **Dentro de alcance (manejados):**
 - Fallos transitorios del LLM y de tools (timeout, 5xx, rate limit) → reintento
   con backoff.
@@ -288,6 +318,18 @@ cualquier máquina.
 - **`structured_call` no usa el historial conversacional**: parte del `prompt`
   recibido, no de `self.messages` (es una utilidad de un solo turno).
 - **Backoff bloqueante** (`time.sleep`), no asíncrono.
+- **No conservamos el primer turno (el goal).** Una práctica común de sliding
+  window es fijar, además de la cola reciente, el primer mensaje de usuario —que
+  suele contener el objetivo de la conversación. Nuestra ventana mantiene solo la
+  cola más reciente y **fuerza el último `user`** (recencia estricta, que es lo
+  único que exige el enunciado). Conservar también el goal es una mejora futura
+  directa si en una conversación muy larga el objetivo inicial dejara de estar en
+  la ventana.
+- **No hay prompt caching.** El cache de prefijo abarata las llamadas cuando el
+  comienzo del prompt (`system` + tools + historial estable) no cambia entre
+  turnos. Nuestra ventana de recencia **cambia el prefijo cada vez** (descarta lo
+  viejo del frente), lo cual es *cache-unfriendly*: es una tensión de diseño
+  conocida (recencia vs. estabilidad del prefijo) que no abordamos en M2.
 
 ### 9.1 Decisión de diseño: clasificación de errores transitorios
 

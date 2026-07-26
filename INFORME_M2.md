@@ -31,6 +31,16 @@ pytest -q --ignore=tests/conformance/test_m3_world.py
 # 97 passed
 ```
 
+**Archivos nuevos/modificados respecto de M1:**
+
+| Archivo | Cambio en M2 |
+|---|---|
+| `student_framework/agent.py` | Statefulness, `_windowed_messages`, `_con_reintentos`, `structured_call`, tracking de tokens |
+| `student_framework/__init__.py` | `build_agent` acepta `max_history_messages`, `max_retries`, `retry_backoff_base` |
+| `student_framework/tools/calculator.py` | Errores recuperables con mensajes accionables |
+| `student_framework/tools/file_reader.py` | Sandbox configurable + validación de rutas + listado de archivos disponibles |
+| `tests/test_m2_propios.py` | 13 tests propios de M2 (resiliencia, recencia, reparación, recuperación) |
+
 ---
 
 ## 2. Estado conversacional (statefulness)
@@ -114,6 +124,27 @@ donde el modelo rinde mejor. Tradeoffs asumidos **deliberadamente**:
 
 Verificamos que conversaciones largas siguen respondiendo con `answer` no vacío
 en `test_conversacion_larga_sigue_respondiendo`.
+
+### 3.4 Problemas encontrados
+
+Cuatro problemas concretos que surgieron al implementar la ventana:
+
+1. **Copia vs. referencia** (el que hacía fallar el test de cota). Aplicar la
+   ventana sobre `self.messages` y pasarla por referencia hacía que el
+   `MockLLMClient` viera el estado final, no el del momento de la llamada; el
+   historial parecía superar el presupuesto. Se resolvió devolviendo una copia
+   (§3.1).
+2. **Cola sin mensaje de usuario.** Con un turno actual más largo que el
+   presupuesto, la cola recortada podía no contener ningún `user` y romper la
+   recencia. Se resolvió forzando el último `user` (§3.2).
+3. **Ventana con `tool`/`assistant` huérfanos.** Recortar "a ciegas" dejaba
+   ventanas que empezaban con un `tool` sin su `toolUse`. Con el mock no molesta,
+   pero Bedrock rechaza un `toolResult` sin su `toolUse`; por eso la ventana
+   descarta del frente hasta que el primer mensaje sea `user`.
+4. **`tool_calls` huérfanos al cortar por `max_iterations`.** Si el bucle cortaba
+   con tool calls pendientes, se guardaba el turno `assistant` con esos
+   `tool_calls` sin su respuesta `tool`. Ahora el último turno se persiste **sin**
+   `tool_calls` para no dejar huérfanos en el historial.
 
 ---
 
@@ -330,6 +361,12 @@ tres filas:
   turnos. Nuestra ventana de recencia **cambia el prefijo cada vez** (descarta lo
   viejo del frente), lo cual es *cache-unfriendly*: es una tensión de diseño
   conocida (recencia vs. estabilidad del prefijo) que no abordamos en M2.
+- **Presupuesto en mensajes, no en tokens.** `max_history_messages` cuenta
+  mensajes; un único mensaje enorme podría exceder el contexto real del modelo.
+  Medir tokens exigiría un tokenizer por proveedor, fuera del alcance de M2.
+- **Idempotencia de tools con efectos.** El reintento de herramientas asume que
+  son seguras de re-ejecutar. Nuestras tres tools son puras o de solo lectura,
+  pero una tool con efectos secundarios podría duplicarlos al reintentarse.
 
 ### 9.1 Decisión de diseño: clasificación de errores transitorios
 
@@ -362,3 +399,41 @@ específicas del SDK en el agente.
 - [x] `AgentResult.input_tokens`/`output_tokens` reflejan lo reportado por el
       cliente LLM (`test_token_accounting*`).
 - [x] Informe con las secciones descriptas (este documento).
+
+---
+
+## 11. Cómo ejecutar
+
+```bash
+# Tests (no requieren clave de API; usan MockLLMClient)
+pytest tests/conformance/test_m2.py     # contrato M2 (cátedra)
+pytest tests/test_m2_propios.py         # resiliencia, recencia, reparación
+pytest tests/test_herramientas.py       # unitarios de las herramientas
+
+# Toda la suite local (sin M3 ni tests de proveedor)
+pytest -q --ignore=tests/conformance/test_m3_world.py \
+  --ignore=tests/test_ollama_provider.py --ignore=tests/test_bedrock_provider.py
+
+# Conversación multiturno contra un LLM real (ver README para el proveedor)
+python -m mia_agents.cli run --module student_framework \
+  --message "¿Cuánto es 17 * 23?"
+```
+
+---
+
+## 12. Trazabilidad contrato → implementación
+
+| Requisito (`ENUNCIADO_M2.md`) | Dónde se cumple | Test |
+|---|---|---|
+| Statefulness entre llamadas a `run` | `self.messages` persiste ([agent.py:122](student_framework/agent.py#L122)) | `test_agent_is_stateful_across_runs` |
+| `chat(...)` nunca supera `max_history_messages` | `_windowed_messages` (§3) | `test_bounded_history_growth` |
+| Mensaje de usuario más reciente siempre presente | `_windowed_messages` (inclusión forzada, §3.2) | `test_ultimo_mensaje_de_usuario_siempre_presente` |
+| Conversaciones largas sin romperse | sliding window + invariantes (§3) | `test_conversacion_larga_sigue_respondiendo` |
+| `structured_call` ofrece `final_result` | `tools=[tool]` en cada `chat` (§4.1) | `test_structured_call_offers_final_result_tool` |
+| Validación + reparación de salida estructurada | los 3 casos (§4.2) | `test_structured_output_repairs_schema_validation_error`, `test_prompt_roto_dispara_reparacion_y_se_recupera` |
+| Fallo limpio al agotar reintentos | `raise RuntimeError` (§4.3) | `test_structured_output_max_retries` |
+| Errores recuperables: calculadora | `tools/calculator.py` (§6.1) | `test_calculadora_*` |
+| Errores recuperables: lector | `tools/file_reader.py` (§6.2) | `test_lector_escape_del_sandbox_via_subdirectorio` |
+| Fallo transitorio reintentado con éxito | `_con_reintentos` (§5) | `test_timeout_del_llm_se_reintenta_y_termina_bien` |
+| Tokens acumulados según el contrato | `_acumular_tokens` (§7) | `test_token_accounting*` |
+| Informe con las secciones pedidas | este documento | — |

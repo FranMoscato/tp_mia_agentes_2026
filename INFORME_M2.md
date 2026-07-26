@@ -28,14 +28,14 @@ esos 97, **20 son de M2**: 7 de conformidad (`tests/conformance/test_m2.py`) + 1
 propios (`tests/test_m2_propios.py`). Si se excluyen los **33 tests de los
 proveedores LLM** (`test_ollama_provider` + `test_bedrock_provider`, que validan
 el cliente fijo `mia_agents/llm_client.py`, no código de M2), quedan **64 tests**
-del framework del alumno + contrato.
+de nuestro código + el contrato de conformidad.
 
 ```bash
 # Toda la suite local (97): excluye solo M3
 pytest -q --ignore=tests/conformance/test_m3_world.py
 # 97 passed
 
-# Solo el código del alumno (64): además excluye los tests de proveedores
+# Solo el código propio (64): sin M3 ni tests de proveedores
 pytest -q --ignore=tests/conformance/test_m3_world.py \
   --ignore=tests/test_ollama_provider.py --ignore=tests/test_bedrock_provider.py
 # 64 passed
@@ -142,18 +142,18 @@ Cuatro problemas concretos que surgieron al implementar la ventana:
 1. **Copia vs. referencia** (el que hacía fallar el test de cota). Aplicar la
    ventana sobre `self.messages` y pasarla por referencia hacía que el
    `MockLLMClient` viera el estado final, no el del momento de la llamada; el
-   historial parecía superar el presupuesto. Se resolvió devolviendo una copia
+   historial parecía superar el presupuesto. Lo resolvimos devolviendo una copia
    (§3.1).
 2. **Cola sin mensaje de usuario.** Con un turno actual más largo que el
    presupuesto, la cola recortada podía no contener ningún `user` y romper la
-   recencia. Se resolvió forzando el último `user` (§3.2).
+   recencia. Lo resolvimos forzando el último `user` (§3.2).
 3. **Ventana con `tool`/`assistant` huérfanos.** Recortar "a ciegas" dejaba
    ventanas que empezaban con un `tool` sin su `toolUse`. Con el mock no molesta,
-   pero Bedrock rechaza un `toolResult` sin su `toolUse`; por eso la ventana
-   descarta del frente hasta que el primer mensaje sea `user`.
+   pero Bedrock rechaza un `toolResult` sin su `toolUse`; por eso descartamos del
+   frente hasta que el primer mensaje sea `user`.
 4. **`tool_calls` huérfanos al cortar por `max_iterations`.** Si el bucle cortaba
    con tool calls pendientes, se guardaba el turno `assistant` con esos
-   `tool_calls` sin su respuesta `tool`. Ahora el último turno se persiste **sin**
+   `tool_calls` sin su respuesta `tool`. Ahora persistimos el último turno **sin**
    `tool_calls` para no dejar huérfanos en el historial.
 
 ---
@@ -340,12 +340,12 @@ cualquier máquina.
 | Escenarios propios M1 | `test_escenarios_propios.py` | 5 |
 | Propios M2 | `test_m2_propios.py` | 13 |
 | Tool schema | `test_tool_schema.py` | 8 |
-| **Subtotal (código del alumno + contrato)** | | **64** |
+| **Subtotal (nuestro código + contrato)** | | **64** |
 | Proveedores LLM (cliente fijo) | `test_ollama_provider.py` + `test_bedrock_provider.py` | 33 |
 | **Total** | | **97** |
 
 Reportamos **97** como "toda la suite local en verde"; **64** es el subconjunto
-que ejercita el código del alumno, excluyendo los **33 tests de proveedores** que
+que ejercita nuestro código, excluyendo los **33 tests de proveedores** que
 validan el cliente LLM fijo (fuera del alcance de M2).
 
 ---

@@ -264,23 +264,24 @@ class MyAgent:
         """Devuelve una COPIA del historial recortada al presupuesto.
 
         Estrategia de memoria: sliding window por recencia que además
-        preserva el objetivo. Conservamos el primer mensaje de usuario (que
-        suele contener la tarea/goal) y la cola más reciente; descartamos los
-        turnos intermedios. Justificación: el contexto útil se concentra en
-        los últimos turnos, pero el goal inicial debe seguir presente para
-        que el agente no "olvide" qué está resolviendo en conversaciones
-        largas.
+        preserva el objetivo. Conservamos el **turno inicial completo** (el
+        primer mensaje de usuario —la tarea/goal— junto con la respuesta del
+        asistente y los `tool` que le siguieron) y la cola de turnos más
+        recientes; descartamos los turnos intermedios. Preservar el turno
+        entero, y no solo el mensaje de usuario, mantiene la coherencia
+        conversacional (nada de dos `user` seguidos ni `tool_calls` sin su
+        respuesta) y respeta la alternancia de roles que exigen proveedores
+        como Bedrock Converse.
 
         Invariantes que garantiza:
           - La lista devuelta nunca supera `max_history_messages`.
-          - El primer mensaje de usuario (el goal) se conserva cuando el
-            historial supera el presupuesto, salvo que deba ceder su lugar
-            para garantizar la recencia con presupuestos mínimos.
+          - El turno inicial completo (el goal) se conserva cuando el
+            historial supera el presupuesto, salvo que sea tan grande que
+            deba cederse para garantizar la recencia.
           - El mensaje de usuario más reciente SIEMPRE está incluido
-            (recencia), aunque el presupuesto sea menor que el turno actual.
-          - La ventana nunca arranca con mensajes `tool` o `assistant`
-            huérfanos (siempre empieza en un mensaje `user`), para no
-            enviar tool_calls sin contexto a proveedores estrictos.
+            (recencia).
+          - La ventana se compone de turnos COMPLETOS: siempre empieza en un
+            mensaje `user` y no deja `tool`/`assistant` huérfanos.
 
         Devuelve una lista NUEVA: el historial interno (`self.messages`)
         nunca se comparte mutable con el cliente LLM.
@@ -290,37 +291,38 @@ class MyAgent:
         total = len(msgs)
 
         if total <= n:
-            ventana = list(msgs)
-        else:
-            # Cola más reciente dentro del presupuesto.
-            ventana = list(msgs[total - n:])
+            return list(msgs)
 
-            # Goal: preservamos el primer mensaje de usuario (suele contener la
-            # tarea). Si no cae ya dentro de la cola, lo anteponemos ocupando un
-            # lugar del presupuesto (patrón `preserve_first_user`).
-            idx_first_user = next(
-                (i for i, m in enumerate(msgs) if m.get("role") == "user"),
-                None,
-            )
-            if idx_first_user is not None and idx_first_user < total - n:
-                ventana = [msgs[idx_first_user]] + ventana[1:]
+        # Índices donde arranca cada turno (los mensajes `user`).
+        user_idxs = [i for i, m in enumerate(msgs) if m.get("role") == "user"]
+        if not user_idxs:
+            return list(msgs[total - n:])
 
-            # Recencia (invariante dura): el último mensaje de usuario SIEMPRE
-            # está. Si un turno actual larguísimo dejó la cola sin él, lo
-            # forzamos —aun a costa del goal, porque la recencia tiene prioridad.
-            idx_last_user = next(
-                (i for i in range(total - 1, -1, -1)
-                 if msgs[i].get("role") == "user"),
-                None,
-            )
-            if idx_last_user is not None and msgs[idx_last_user] not in ventana:
-                ventana = [msgs[idx_last_user]] + list(msgs[total - (n - 1):])
+        # Turno inicial COMPLETO (el goal): del primer `user` al segundo
+        # `user` (exclusivo) — la tarea con su respuesta del asistente.
+        fin_primer_turno = user_idxs[1] if len(user_idxs) > 1 else total
+        first_turn = list(msgs[:fin_primer_turno])
 
-        # La ventana siempre empieza en un mensaje de usuario: descartamos
-        # mensajes `tool`/`assistant` que quedaron sin su turno completo.
+        # Cola: el turno-boundary más antiguo cuyo bloque hasta el final entra
+        # en el presupuesto restante. Así sumamos turnos COMPLETOS y
+        # garantizamos el último `user` (recencia).
+        espacio = n - len(first_turn)
+        cola_start = next(
+            (idx for idx in user_idxs
+             if idx >= fin_primer_turno and total - idx <= espacio),
+            None,
+        )
+        if cola_start is not None:
+            return first_turn + list(msgs[cola_start:])
+
+        # Turno inicial tan grande que no deja lugar a un turno reciente
+        # completo: priorizamos la recencia con la cola cruda que arranque en
+        # un `user`.
+        ventana = list(msgs[total - n:])
         while ventana and ventana[0].get("role") != "user":
             ventana.pop(0)
-
+        if not ventana:
+            ventana = [msgs[user_idxs[-1]]]
         return ventana
 
     def _con_reintentos(self, fn: Callable[[], Any]) -> Any:

@@ -189,13 +189,19 @@ def test_primer_turno_goal_se_conserva() -> None:
         agent.run(f"seguimiento-{i}")
 
     # En la última llamada, el historial es mucho mayor que el presupuesto:
-    # el goal debe seguir estando, sin superar la cota.
+    # el TURNO inicial completo (goal + su respuesta) debe encabezar la ventana.
     ultima = mock.calls[-1]["messages"]
     assert len(ultima) <= budget
-    assert any(
-        m.get("role") == "user" and "GOAL:" in str(m.get("content"))
-        for m in ultima
-    ), "el primer mensaje (goal) debe conservarse en la ventana"
+    assert ultima[0].get("role") == "user" and "GOAL:" in str(ultima[0].get("content")), \
+        "el goal debe encabezar la ventana"
+    assert ultima[1].get("role") == "assistant", \
+        "se preserva el turno completo: el goal va con su respuesta del asistente"
+
+    # Coherencia conversacional: nunca dos mensajes `user` consecutivos.
+    roles = [m.get("role") for m in ultima]
+    assert not any(
+        roles[i] == "user" and roles[i + 1] == "user" for i in range(len(roles) - 1)
+    ), "la ventana no debe dejar dos turnos de usuario pegados"
 
 
 def test_conversacion_larga_sigue_respondiendo() -> None:

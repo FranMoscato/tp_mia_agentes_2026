@@ -185,6 +185,19 @@ Cuatro problemas concretos que surgieron al implementar la ventana:
 ([agent.py:379-525](student_framework/agent.py#L379)) obliga al LLM a responder
 con un objeto validado contra un schema de Pydantic.
 
+**Decisión de diseño: es un método aparte, no un paso del loop ReAct.** El bucle
+de `run()` es sense→decide→act y corta cuando el modelo decide que terminó (o al
+llegar a `max_iterations`); `structured_call` tiene otra condición de corte —un
+`tool_call` a `final_result` cuyos argumentos **validan** contra el schema— y su
+propio loop de **reparación** acotado por `max_repair_attempts`. Además expone
+**solo** la tool `final_result` (no las herramientas registradas) y trabaja sobre
+un historial `messages` **local y fresco**, sin tocar `self.messages`: es una
+extracción estructurada one-shot, stateless respecto de la conversación del
+agente. Mantenerlo separado evita mezclar dos criterios de terminación distintos
+y preserva la garantía de formato. Lo que **sí** comparte con el loop es la capa
+de resiliencia (`self._con_reintentos`, §5): control-flow separado, primitivas de
+robustez compartidas.
+
 ### 4.1 Cómo se ofrece `final_result`
 
 En cada intento se pasa **únicamente** la tool sintética

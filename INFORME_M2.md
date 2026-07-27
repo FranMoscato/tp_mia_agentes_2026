@@ -145,6 +145,13 @@ donde el modelo rinde mejor. Tradeoffs asumidos **deliberadamente**:
   y más complejidad; para el alcance de M2 no lo justificamos.
 - **El estado vive en memoria del proceso**: no hay persistencia entre
   ejecuciones.
+- **Anclar el primer turno es una heurística**, no una verdad universal.
+  Asume que el objetivo inicial se mantiene vigente durante toda la conversación
+  (`preserve_first_user`, Clase 4), lo cual es razonable en tareas de agente con
+  una meta estable. Si la conversación cambia de objetivo a mitad de camino,
+  seguimos gastando presupuesto en un goal que ya no aplica; una estrategia más
+  sofisticada detectaría el goal vigente en lugar de fijar el primero. Para el
+  alcance de M2 lo asumimos deliberadamente como default simple y defendible.
 
 Verificamos que conversaciones largas siguen respondiendo con `answer` no vacío
 en `test_conversacion_larga_sigue_respondiendo`.

@@ -128,6 +128,14 @@ produce:
 - `description` ← docstring completo.
 - `parameters` ← JSON Schema de los argumentos (tipos, descripciones, `required`).
 
+> **Por qué el docstring importa tanto.** La `description` es lo que el modelo lee
+> para decidir *cuándo* y *cómo* usar la herramienta, y es el factor que más afecta
+> la performance de tool use (Anthropic recomienda tratarla como documentación para
+> un dev junior). Por eso escribimos docstrings explícitos —qué hace, cuándo usarla,
+> formato de los argumentos— y los tratamos como la **documentación pública** de la
+> tool hacia el LLM: al derivar la `description` del docstring, la calidad del
+> prompt de la herramienta y la del código quedan en un solo lugar.
+
 ### 3.3 Registro: qué guarda `register_tool`
 
 ```python
@@ -336,6 +344,12 @@ por cero se interceptan y devuelven `"Error: ..."` sin lanzar excepción.
 Además, **cada herramienta** maneja sus propios errores de dominio devolviendo
 strings `"Error: ..."` (operador inválido, módulo por cero, archivo inexistente,
 binario, etc.), de modo que ni siquiera llegan a lanzar.
+
+El criterio de diseño es **errores como observaciones**: en lugar de cortar el
+bucle, el error se vuelca a la conversación como un `tool` message y el modelo lo
+lee en la iteración siguiente. Así el bucle nunca se rompe por culpa de una
+herramienta y queda habilitada la autocorrección del agente (que M2 explota con
+mensajes de error accionables).
 
 ---
 

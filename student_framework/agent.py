@@ -263,14 +263,19 @@ class MyAgent:
     def _windowed_messages(self) -> list[dict[str, Any]]:
         """Devuelve una COPIA del historial recortada al presupuesto.
 
-        Estrategia de memoria: sliding window por recencia. Conservamos la
-        cola más reciente del historial y descartamos lo más antiguo.
-        Justificación: en una conversación el contexto útil se concentra en
-        los últimos turnos; los turnos viejos son los de menor valor
-        esperado y son los que sacrificamos al quedarnos sin presupuesto.
+        Estrategia de memoria: sliding window por recencia que además
+        preserva el objetivo. Conservamos el primer mensaje de usuario (que
+        suele contener la tarea/goal) y la cola más reciente; descartamos los
+        turnos intermedios. Justificación: el contexto útil se concentra en
+        los últimos turnos, pero el goal inicial debe seguir presente para
+        que el agente no "olvide" qué está resolviendo en conversaciones
+        largas.
 
         Invariantes que garantiza:
           - La lista devuelta nunca supera `max_history_messages`.
+          - El primer mensaje de usuario (el goal) se conserva cuando el
+            historial supera el presupuesto, salvo que deba ceder su lugar
+            para garantizar la recencia con presupuestos mínimos.
           - El mensaje de usuario más reciente SIEMPRE está incluido
             (recencia), aunque el presupuesto sea menor que el turno actual.
           - La ventana nunca arranca con mensajes `tool` o `assistant`
@@ -282,22 +287,34 @@ class MyAgent:
         """
         n = self._max_history_messages
         msgs = self.messages
+        total = len(msgs)
 
-        if len(msgs) <= n:
+        if total <= n:
             ventana = list(msgs)
         else:
-            ventana = list(msgs[len(msgs) - n:])
+            # Cola más reciente dentro del presupuesto.
+            ventana = list(msgs[total - n:])
 
-            # Recencia: si el turno actual (tool calls mediante) es más largo
-            # que el presupuesto, la cola podría no contener ningún mensaje
-            # de usuario. Forzamos la inclusión del último mensaje de usuario.
-            if not any(m.get("role") == "user" for m in ventana):
-                idx_user = max(
-                    (i for i, m in enumerate(msgs) if m.get("role") == "user"),
-                    default=None,
-                )
-                if idx_user is not None:
-                    ventana = [msgs[idx_user]] + list(msgs[len(msgs) - (n - 1):])
+            # Goal: preservamos el primer mensaje de usuario (suele contener la
+            # tarea). Si no cae ya dentro de la cola, lo anteponemos ocupando un
+            # lugar del presupuesto (patrón `preserve_first_user`).
+            idx_first_user = next(
+                (i for i, m in enumerate(msgs) if m.get("role") == "user"),
+                None,
+            )
+            if idx_first_user is not None and idx_first_user < total - n:
+                ventana = [msgs[idx_first_user]] + ventana[1:]
+
+            # Recencia (invariante dura): el último mensaje de usuario SIEMPRE
+            # está. Si un turno actual larguísimo dejó la cola sin él, lo
+            # forzamos —aun a costa del goal, porque la recencia tiene prioridad.
+            idx_last_user = next(
+                (i for i in range(total - 1, -1, -1)
+                 if msgs[i].get("role") == "user"),
+                None,
+            )
+            if idx_last_user is not None and msgs[idx_last_user] not in ventana:
+                ventana = [msgs[idx_last_user]] + list(msgs[total - (n - 1):])
 
         # La ventana siempre empieza en un mensaje de usuario: descartamos
         # mensajes `tool`/`assistant` que quedaron sin su turno completo.

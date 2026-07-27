@@ -177,6 +177,27 @@ def test_ultimo_mensaje_de_usuario_siempre_presente() -> None:
     ), "el mensaje de usuario más reciente nunca puede descartarse"
 
 
+def test_primer_turno_goal_se_conserva() -> None:
+    """El primer mensaje de usuario (el goal) sigue presente aunque el
+    historial supere el presupuesto (patrón preserve_first_user)."""
+    budget = 4
+    mock = MockLLMClient([LLMResponse(content=f"r{i}") for i in range(20)])
+    agent = build_agent({"llm_client": mock, "max_history_messages": budget})
+
+    agent.run("GOAL: resolver la tarea inicial")
+    for i in range(10):
+        agent.run(f"seguimiento-{i}")
+
+    # En la última llamada, el historial es mucho mayor que el presupuesto:
+    # el goal debe seguir estando, sin superar la cota.
+    ultima = mock.calls[-1]["messages"]
+    assert len(ultima) <= budget
+    assert any(
+        m.get("role") == "user" and "GOAL:" in str(m.get("content"))
+        for m in ultima
+    ), "el primer mensaje (goal) debe conservarse en la ventana"
+
+
 def test_conversacion_larga_sigue_respondiendo() -> None:
     """Decenas de turnos con mensajes grandes: cada run devuelve answer no vacío."""
     turnos = 40

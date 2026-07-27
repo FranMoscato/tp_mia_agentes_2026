@@ -87,19 +87,21 @@ def _guardar(fig, nombre: str) -> None:
 
 
 def diagrama_memoria() -> None:
-    fig, ax = plt.subplots(figsize=(11, 5))
+    fig, ax = plt.subplots(figsize=(11, 5.4))
     ax.set_xlim(0, 11)
-    ax.set_ylim(0, 5)
+    ax.set_ylim(0, 5.4)
     ax.axis("off")
 
-    ax.text(5.5, 4.6, "Gestión de memoria: sliding window por recencia",
+    ax.text(5.5, 5.05, "Gestión de memoria: sliding window por recencia + goal",
             ha="center", fontsize=14, weight="bold")
 
     # Fila de mensajes del historial (self.messages), del más viejo al actual.
+    # Turno inicial (goal) = amarillo; turnos intermedios (descartados) = rojo;
+    # cola reciente = azul/gris; último user = verde.
     etiquetas = [
-        ("user 0", AZUL, AZUL_B), ("assist 0", GRIS, GRIS_B),
-        ("user 1", AZUL, AZUL_B), ("assist 1", GRIS, GRIS_B),
-        ("user 2", AZUL, AZUL_B), ("assist 2", GRIS, GRIS_B),
+        ("user 0\n(goal)", AMARILLO, AMARILLO_B), ("assist 0", AMARILLO, AMARILLO_B),
+        ("user 1", ROJO, ROJO_B), ("assist 1", ROJO, ROJO_B),
+        ("user 2", ROJO, ROJO_B), ("assist 2", ROJO, ROJO_B),
         ("user 3", AZUL, AZUL_B), ("assist 3", GRIS, GRIS_B),
         ("user\nAHORA", VERDE, VERDE_B),
     ]
@@ -109,36 +111,50 @@ def diagrama_memoria() -> None:
         x = x0 + i * (w + gap)
         xs.append(x)
         caja(ax, x, y0, w, h, txt, face, edge, fontsize=8.5,
-             weight="bold" if "AHORA" in txt else "normal")
+             weight="bold" if ("goal" in txt or "AHORA" in txt) else "normal")
 
-    ax.text(x0, y0 + h + 0.35, "self.messages  (historial completo, persiste entre run)",
-            ha="left", fontsize=9.5, style="italic", color="#334155")
     ax.annotate("", xy=(xs[-1] + w, y0 - 0.35), xytext=(x0, y0 - 0.35),
                 arrowprops=dict(arrowstyle="->", color=GRIS_B, lw=1.3))
     ax.text(x0, y0 - 0.6, "más antiguo", ha="left", fontsize=8, color=GRIS_B)
     ax.text(xs[-1] + w, y0 - 0.6, "más reciente", ha="right", fontsize=8, color=GRIS_B)
 
-    # Ventana: cubre la cola más reciente (últimos N = max_history_messages).
-    win_left = xs[5] - gap / 2
-    win_right = xs[-1] + w + 0.05
+    # Región del goal: turno inicial COMPLETO (user + assistant), boxes 0-1.
+    goal_l, goal_r = xs[0] - gap / 2, xs[1] + w + 0.05
     ax.add_patch(FancyBboxPatch(
-        (win_left, y0 - 0.18), win_right - win_left, h + 0.36,
+        (goal_l, y0 - 0.18), goal_r - goal_l, h + 0.36,
         boxstyle="round,pad=0.02,rounding_size=0.05",
         linewidth=2.2, edgecolor=VIOLETA_B, facecolor="none", zorder=5,
     ))
-    ax.text((win_left + win_right) / 2, y0 + h + 0.72,
-            "ventana enviada al LLM  (≤ max_history_messages)",
-            ha="center", fontsize=10, weight="bold", color=VIOLETA_B)
+    ax.text((goal_l + goal_r) / 2, y0 + h + 0.32,
+            "turno inicial (goal)\npreservado completo", ha="center",
+            fontsize=8.5, weight="bold", color=VIOLETA_B)
 
-    # Zona descartada.
-    ax.text((x0 + win_left) / 2, y0 + h + 0.72, "descartado\n(más antiguo)",
-            ha="center", fontsize=9, color=ROJO_B, style="italic")
+    # Región de la cola reciente: boxes 6-8.
+    rec_l, rec_r = xs[6] - gap / 2, xs[-1] + w + 0.05
+    ax.add_patch(FancyBboxPatch(
+        (rec_l, y0 - 0.18), rec_r - rec_l, h + 0.36,
+        boxstyle="round,pad=0.02,rounding_size=0.05",
+        linewidth=2.2, edgecolor=VIOLETA_B, facecolor="none", zorder=5,
+    ))
+    ax.text((rec_l + rec_r) / 2, y0 + h + 0.32, "cola reciente",
+            ha="center", fontsize=9, weight="bold", color=VIOLETA_B)
+
+    # Zona descartada (turnos intermedios): boxes 2-5.
+    ax.text((xs[2] + xs[5] + w) / 2, y0 + h + 0.32,
+            "descartado\n(turnos intermedios)", ha="center", fontsize=8.5,
+            color=ROJO_B, style="italic")
+
+    # Caption: la ventana = goal + cola.
+    ax.text(5.5, 4.55,
+            "ventana enviada al LLM  =  turno inicial (goal)  +  cola reciente"
+            "   (≤ max_history_messages)",
+            ha="center", fontsize=10, weight="bold", color=VIOLETA_B)
 
     # Notas de invariantes.
     caja(ax, 0.5, 0.35, 10.0, 1.35,
-         "_windowed_messages()  →  devuelve una COPIA de la cola (self.messages nunca se comparte mutable)\n\n"
-         "• Recencia: si la cola no incluye ningún 'user', se fuerza el último mensaje de usuario dentro de la ventana.\n"
-         "• La ventana siempre empieza en un mensaje 'user' (se descartan tool/assistant huérfanos del frente).",
+         "_windowed_messages()  →  devuelve una COPIA compuesta por turnos COMPLETOS (self.messages nunca se comparte mutable)\n\n"
+         "• Goal: se preserva el TURNO inicial completo (user + assistant), no solo el mensaje — sin 'user' consecutivos ni tool_calls sin respuesta.\n"
+         "• Recencia: el último mensaje de usuario siempre viaja al LLM. La ventana empieza en 'user' y respeta la alternancia (Bedrock Converse).",
          VIOLETA, VIOLETA_B, fontsize=9.5)
 
     _guardar(fig, "memoria_m2.png")

@@ -85,9 +85,11 @@ La estrategia obligatoria es **sliding window por recencia**, en
 cada llamada al LLM se construye una **copia recortada** del historial:
 
 - Si `len(self.messages) <= max_history_messages`, se envía tal cual.
-- Si lo supera, se conserva el **primer mensaje de usuario** (el goal) y la
-  **cola más reciente**, descartando los turnos intermedios (patrón
-  `preserve_first_user` visto en clase).
+- Si lo supera, se conserva el **turno inicial completo** (el goal: el primer
+  mensaje de usuario **y su respuesta del asistente**) más los **turnos
+  recientes**, descartando los intermedios. La ventana se compone de turnos
+  completos (patrón `preserve_first_user` visto en clase, extendido al turno
+  entero).
 
 **Detalle clave (bug corregido):** `_windowed_messages` devuelve una **lista
 nueva**, nunca el objeto `self.messages`. Una versión anterior aplicaba la
@@ -106,12 +108,16 @@ la inclusión del último mensaje de usuario al frente de la ventana
 ([agent.py:294-300](student_framework/agent.py#L294)). Cubierto por
 `test_ultimo_mensaje_de_usuario_siempre_presente`.
 
-El **primer mensaje de usuario (el goal)** también se conserva cuando el historial
-supera el presupuesto: suele contener la tarea, y mantenerlo evita que el agente
-"olvide" qué está resolviendo en conversaciones largas (patrón `preserve_first_user`
-de la Clase 4). La recencia tiene prioridad: con presupuestos mínimos el goal cede
-su lugar para garantizar el último `user`. Cubierto por
-`test_primer_turno_goal_se_conserva`.
+El **turno inicial completo (el goal)** también se conserva cuando el historial
+supera el presupuesto. Preservamos el primer mensaje de usuario **junto con su
+respuesta del asistente** (no solo el mensaje suelto): esto evita dejar dos `user`
+consecutivos o un `tool_call` sin su respuesta en la ventana, y respeta la
+**alternancia de roles** que exige Bedrock Converse. Mantener el goal evita, además,
+que el agente "olvide" la tarea en conversaciones largas (patrón `preserve_first_user`
+de la Clase 4, extendido al turno entero). La recencia tiene prioridad: si el turno
+inicial fuera tan grande que no dejara lugar, cede para garantizar el último `user`.
+Cubierto por `test_primer_turno_goal_se_conserva`, que además verifica que no queden
+dos turnos de usuario pegados.
 
 Además, la ventana **siempre empieza en un mensaje `user`**: se descartan del
 frente los `tool`/`assistant` que hayan quedado sin su turno completo. Esto evita
@@ -139,6 +145,13 @@ donde el modelo rinde mejor. Tradeoffs asumidos **deliberadamente**:
   y más complejidad; para el alcance de M2 no lo justificamos.
 - **El estado vive en memoria del proceso**: no hay persistencia entre
   ejecuciones.
+- **Anclar el primer turno es una heurística**, no una verdad universal.
+  Asume que el objetivo inicial se mantiene vigente durante toda la conversación
+  (`preserve_first_user`, Clase 4), lo cual es razonable en tareas de agente con
+  una meta estable. Si la conversación cambia de objetivo a mitad de camino,
+  seguimos gastando presupuesto en un goal que ya no aplica; una estrategia más
+  sofisticada detectaría el goal vigente en lugar de fijar el primero. Para el
+  alcance de M2 lo asumimos deliberadamente como default simple y defendible.
 
 Verificamos que conversaciones largas siguen respondiendo con `answer` no vacío
 en `test_conversacion_larga_sigue_respondiendo`.
@@ -171,6 +184,19 @@ Cuatro problemas concretos que surgieron al implementar la ventana:
 `structured_call(prompt, schema, max_repair_attempts=2)`
 ([agent.py:379-525](student_framework/agent.py#L379)) obliga al LLM a responder
 con un objeto validado contra un schema de Pydantic.
+
+**Decisión de diseño: es un método aparte, no un paso del loop ReAct.** El bucle
+de `run()` es sense→decide→act y corta cuando el modelo decide que terminó (o al
+llegar a `max_iterations`); `structured_call` tiene otra condición de corte —un
+`tool_call` a `final_result` cuyos argumentos **validan** contra el schema— y su
+propio loop de **reparación** acotado por `max_repair_attempts`. Además expone
+**solo** la tool `final_result` (no las herramientas registradas) y trabaja sobre
+un historial `messages` **local y fresco**, sin tocar `self.messages`: es una
+extracción estructurada one-shot, stateless respecto de la conversación del
+agente. Mantenerlo separado evita mezclar dos criterios de terminación distintos
+y preserva la garantía de formato. Lo que **sí** comparte con el loop es la capa
+de resiliencia (`self._con_reintentos`, §5): control-flow separado, primitivas de
+robustez compartidas.
 
 ### 4.1 Cómo se ofrece `final_result`
 
@@ -244,13 +270,18 @@ Ambos parámetros se pueden configurar desde `build_agent`
 (`max_retries`, `retry_backoff_base`); poner `retry_backoff_base=0` desactiva los
 sleeps en los tests.
 
-### 5.3 Cobertura
+### 5.3 Cobertura de pruebas
 
-`test_timeout_del_llm_se_reintenta_y_termina_bien`,
-`test_throttling_del_llm_se_reintenta`,
-`test_error_no_transitorio_no_se_reintenta`,
-`test_reintentos_agotados_propagan_el_error` y
-`test_tool_con_fallo_transitorio_se_reintenta`.
+La resiliencia está verificada por tests propios que simulan cada tipo de fallo
+y comprueban el comportamiento esperado: que los transitorios se reintenten y la
+ejecución termine bien, y que los no transitorios afloren sin reintento. Los
+tests que la cubren:
+
+- `test_timeout_del_llm_se_reintenta_y_termina_bien` — un timeout se reintenta y `run` tiene éxito.
+- `test_throttling_del_llm_se_reintenta` — un rate limit (429) / 5xx se reintenta.
+- `test_error_no_transitorio_no_se_reintenta` — un error de programación aflora limpio, sin reintentos.
+- `test_reintentos_agotados_propagan_el_error` — si el fallo persiste, tras agotar los reintentos se propaga.
+- `test_tool_con_fallo_transitorio_se_reintenta` — una herramienta que falla una vez con timeout se reintenta.
 
 ---
 
@@ -457,7 +488,7 @@ python -m mia_agents.cli run --module student_framework \
 | Statefulness entre llamadas a `run` | `self.messages` persiste ([agent.py:122](student_framework/agent.py#L122)) | `test_agent_is_stateful_across_runs` |
 | `chat(...)` nunca supera `max_history_messages` | `_windowed_messages` (§3) | `test_bounded_history_growth` |
 | Mensaje de usuario más reciente siempre presente | `_windowed_messages` (inclusión forzada, §3.2) | `test_ultimo_mensaje_de_usuario_siempre_presente` |
-| Primer turno (goal) preservado | `_windowed_messages` (patrón `preserve_first_user`, §3.2) | `test_primer_turno_goal_se_conserva` |
+| Turno inicial completo (goal) preservado | `_windowed_messages` (turnos completos, §3.2) | `test_primer_turno_goal_se_conserva` |
 | Conversaciones largas sin romperse | sliding window + invariantes (§3) | `test_conversacion_larga_sigue_respondiendo` |
 | `structured_call` ofrece `final_result` | `tools=[tool]` en cada `chat` (§4.1) | `test_structured_call_offers_final_result_tool` |
 | Validación + reparación de salida estructurada | los 3 casos (§4.2) | `test_structured_output_repairs_schema_validation_error`, `test_prompt_roto_dispara_reparacion_y_se_recupera` |

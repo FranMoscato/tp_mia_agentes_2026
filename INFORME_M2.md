@@ -22,23 +22,23 @@ Lo implementado:
 - **Errores recuperables accionables** en la calculadora y el lector de archivos.
 - **Tracking de tokens** acumulado por `run`.
 
-**Estado de los tests:** toda la suite local pasa — **97 tests en verde**
+**Estado de los tests:** toda la suite local pasa — **98 tests en verde**
 (excluyendo M3, que requiere el paquete `mia_world`, no presente en el repo). De
-esos 97, **20 son de M2**: 7 de conformidad (`tests/conformance/test_m2.py`) + 13
+esos 98, **21 son de M2**: 7 de conformidad (`tests/conformance/test_m2.py`) + 14
 propios (`tests/test_m2_propios.py`). Si se excluyen los **33 tests de los
 proveedores LLM** (`test_ollama_provider` + `test_bedrock_provider`, que validan
-el cliente fijo `mia_agents/llm_client.py`, no código de M2), quedan **64 tests**
+el cliente fijo `mia_agents/llm_client.py`, no código de M2), quedan **65 tests**
 de nuestro código + el contrato de conformidad.
 
 ```bash
-# Toda la suite local (97): excluye solo M3
+# Toda la suite local (98): excluye solo M3
 pytest -q --ignore=tests/conformance/test_m3_world.py
-# 97 passed
+# 98 passed
 
-# Solo el código propio (64): sin M3 ni tests de proveedores
+# Solo el código propio (65): sin M3 ni tests de proveedores
 pytest -q --ignore=tests/conformance/test_m3_world.py \
   --ignore=tests/test_ollama_provider.py --ignore=tests/test_bedrock_provider.py
-# 64 passed
+# 65 passed
 ```
 
 **Archivos nuevos/modificados respecto de M1:**
@@ -85,8 +85,9 @@ La estrategia obligatoria es **sliding window por recencia**, en
 cada llamada al LLM se construye una **copia recortada** del historial:
 
 - Si `len(self.messages) <= max_history_messages`, se envía tal cual.
-- Si lo supera, se conserva únicamente la **cola más reciente**
-  (`msgs[len-n:]`) y se descarta lo más antiguo.
+- Si lo supera, se conserva el **primer mensaje de usuario** (el goal) y la
+  **cola más reciente**, descartando los turnos intermedios (patrón
+  `preserve_first_user` visto en clase).
 
 **Detalle clave (bug corregido):** `_windowed_messages` devuelve una **lista
 nueva**, nunca el objeto `self.messages`. Una versión anterior aplicaba la
@@ -105,17 +106,24 @@ la inclusión del último mensaje de usuario al frente de la ventana
 ([agent.py:294-300](student_framework/agent.py#L294)). Cubierto por
 `test_ultimo_mensaje_de_usuario_siempre_presente`.
 
+El **primer mensaje de usuario (el goal)** también se conserva cuando el historial
+supera el presupuesto: suele contener la tarea, y mantenerlo evita que el agente
+"olvide" qué está resolviendo en conversaciones largas (patrón `preserve_first_user`
+de la Clase 4). La recencia tiene prioridad: con presupuestos mínimos el goal cede
+su lugar para garantizar el último `user`. Cubierto por
+`test_primer_turno_goal_se_conserva`.
+
 Además, la ventana **siempre empieza en un mensaje `user`**: se descartan del
-frente los `tool`/`assistant` que hayan quedado sin su turno completo
-([agent.py:304-305](student_framework/agent.py#L304)). Esto evita mandar
-`tool_calls` sin contexto a proveedores estrictos como Bedrock Converse.
+frente los `tool`/`assistant` que hayan quedado sin su turno completo. Esto evita
+mandar `tool_calls` sin contexto a proveedores estrictos como Bedrock Converse.
 
 ### 3.3 Justificación y tradeoffs
 
-Elegimos recencia pura porque en una conversación el contexto útil se concentra
-en los últimos turnos; los viejos son los de menor valor esperado y son los
-primeros que sacrificamos al quedarnos sin presupuesto. Ventajas: simple,
-determinista y O(n).
+Elegimos recencia **más preservación del goal** porque en una conversación el
+contexto útil se concentra en los últimos turnos, pero el objetivo inicial debe
+seguir presente para no perder el rumbo. Los turnos **intermedios** son los de
+menor valor esperado y son los que sacrificamos al quedarnos sin presupuesto.
+Ventajas: simple, determinista y O(n).
 
 Acotar el historial no es solo por costo o por el límite duro de la ventana:
 **más contexto no es mejor contexto**. Dos resultados lo respaldan: *Lost in the
@@ -322,7 +330,7 @@ permite proyectar el gasto real de una conversación.
 
 - **Conformidad** (`tests/conformance/test_m2.py`, 7/7): statefulness, historial
   acotado, `final_result`, reparación, reintentos de reparación y tokens.
-- **Propios** (`tests/test_m2_propios.py`, 13 casos): resiliencia (timeout,
+- **Propios** (`tests/test_m2_propios.py`, 14 casos): resiliencia (timeout,
   throttling, no-transitorio, reintentos agotados, tool transitoria), recencia,
   conversación larga, reparación de salida estructurada, y errores accionables de
   ambas herramientas (incluida una recuperación end-to-end vía el agente).
@@ -338,13 +346,13 @@ cualquier máquina.
 | Conformidad M2 | `conformance/test_m2.py` | 7 |
 | Herramientas | `test_herramientas.py` | 26 |
 | Escenarios propios M1 | `test_escenarios_propios.py` | 5 |
-| Propios M2 | `test_m2_propios.py` | 13 |
+| Propios M2 | `test_m2_propios.py` | 14 |
 | Tool schema | `test_tool_schema.py` | 8 |
-| **Subtotal (nuestro código + contrato)** | | **64** |
+| **Subtotal (nuestro código + contrato)** | | **65** |
 | Proveedores LLM (cliente fijo) | `test_ollama_provider.py` + `test_bedrock_provider.py` | 33 |
-| **Total** | | **97** |
+| **Total** | | **98** |
 
-Reportamos **97** como "toda la suite local en verde"; **64** es el subconjunto
+Reportamos **98** como "toda la suite local en verde"; **65** es el subconjunto
 que ejercita nuestro código, excluyendo los **33 tests de proveedores** que
 validan el cliente LLM fijo (fuera del alcance de M2).
 
@@ -377,13 +385,6 @@ tres filas:
 - **`structured_call` no usa el historial conversacional**: parte del `prompt`
   recibido, no de `self.messages` (es una utilidad de un solo turno).
 - **Backoff bloqueante** (`time.sleep`), no asíncrono.
-- **No conservamos el primer turno (el goal).** Una práctica común de sliding
-  window es fijar, además de la cola reciente, el primer mensaje de usuario —que
-  suele contener el objetivo de la conversación. Nuestra ventana mantiene solo la
-  cola más reciente y **fuerza el último `user`** (recencia estricta, que es lo
-  único que exige el enunciado). Conservar también el goal es una mejora futura
-  directa si en una conversación muy larga el objetivo inicial dejara de estar en
-  la ventana.
 - **No hay prompt caching.** El cache de prefijo abarata las llamadas cuando el
   comienzo del prompt (`system` + tools + historial estable) no cambia entre
   turnos. Nuestra ventana de recencia **cambia el prefijo cada vez** (descarta lo
@@ -456,6 +457,7 @@ python -m mia_agents.cli run --module student_framework \
 | Statefulness entre llamadas a `run` | `self.messages` persiste ([agent.py:122](student_framework/agent.py#L122)) | `test_agent_is_stateful_across_runs` |
 | `chat(...)` nunca supera `max_history_messages` | `_windowed_messages` (§3) | `test_bounded_history_growth` |
 | Mensaje de usuario más reciente siempre presente | `_windowed_messages` (inclusión forzada, §3.2) | `test_ultimo_mensaje_de_usuario_siempre_presente` |
+| Primer turno (goal) preservado | `_windowed_messages` (patrón `preserve_first_user`, §3.2) | `test_primer_turno_goal_se_conserva` |
 | Conversaciones largas sin romperse | sliding window + invariantes (§3) | `test_conversacion_larga_sigue_respondiendo` |
 | `structured_call` ofrece `final_result` | `tools=[tool]` en cada `chat` (§4.1) | `test_structured_call_offers_final_result_tool` |
 | Validación + reparación de salida estructurada | los 3 casos (§4.2) | `test_structured_output_repairs_schema_validation_error`, `test_prompt_roto_dispara_reparacion_y_se_recupera` |

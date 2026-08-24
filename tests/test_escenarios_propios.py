@@ -189,7 +189,8 @@ def test_escenario_corte_por_max_iterations() -> None:
     devolver un `AgentResult` válido (no lanzar excepción).
     """
     # Construimos 30 respuestas que SIEMPRE piden la calculadora (bucle infinito
-    # simulado). El agente por defecto trae max_iterations=10.
+    # simulado). Fijamos `max_iterations` explícito para que el test verifique el
+    # contrato de corte con independencia del default (M3 lo subió a 20).
     respuestas = [
         LLMResponse(
             content=None,
@@ -201,10 +202,10 @@ def test_escenario_corte_por_max_iterations() -> None:
     ]
     mock = MockLLMClient(respuestas)
 
-    agent = build_agent({"llm_client": mock})
+    agent = build_agent({"llm_client": mock, "max_iterations": 10})
     result = agent.run("entrá en bucle")
 
-    # No superó el tope de llamadas al LLM (max_iterations=10 por defecto).
+    # No superó el tope de llamadas al LLM configurado (max_iterations=10).
     assert mock.call_count == 10
     # Aun cortando por límite, devuelve un AgentResult válido (answer es str).
     assert isinstance(result.answer, str)

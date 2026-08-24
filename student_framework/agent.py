@@ -14,6 +14,8 @@ from __future__ import annotations
 import time
 from typing import Any, Callable
 
+from pydantic import BaseModel, Field
+
 from mia_agents.protocols import LLMClient
 from mia_agents.types import AgentResult, AgentStep, LLMResponse, ToolCall, ToolSchema
 from mia_agents.tool_schema import final_result_tool_schema,FINAL_RESULT_TOOL_NAME
@@ -301,6 +303,88 @@ Sin embargo, NO asumas que una llave sirve para una cerradura únicamente por su
 """
 
 
+# ---------------------------------------------------------------------------
+# Summarizer de estado de partida (opcional, se activa con use_summarizer)
+# ---------------------------------------------------------------------------
+# Estructura, prompts y lógica de resumen basados en la rama de trabajo del
+# equipo. Acá quedan detrás del flag `use_summarizer` (default False), de modo
+# que M1/M2 y el modo ReAct puro no pagan ningún costo cuando está apagado.
+
+
+class GameState(BaseModel):
+    """Estado estructurado de la partida que el summarizer mantiene al día."""
+
+    inventory: list[str] = Field(default_factory=list)
+    current_location: str | None = None
+    visited_locations: list[str] = Field(default_factory=list)
+    succesful_actions: list[str] = Field(default_factory=list)
+    failed_actions: list[str] = Field(default_factory=list)
+    observations: list[str] = Field(default_factory=list)
+    known_exits: list[str] = Field(default_factory=list)
+
+
+# Se ANEXA al system prompt solo cuando el summarizer está activo: le explica al
+# agente que va a recibir un bloque "ESTADO ACTUAL DE LA PARTIDA" y qué contiene.
+SUMMARIZER_PROMPT_ADDENDUM = """
+15. Presta atencion al 'ESTADO ACTUAL DE LA PARTIDA' ya que tiene informacion util para escapar. Contine una lista de acciones realizadas, consideralas antes de proponer una siguiente accion.
+
+SCHEMA DE 'ESTADO ACTUAL DE LA PARTIDA':
+
+    -inventory: lista de objetos que tomamos (hay que agregarlos SOLO cuando la tool/function ´take´ se realiza con exito. NO agregues un objeto si solo se menciono como resultado de ´look´ o de ´examine´)
+    -current_location: ubicacion actual
+    -visited_locations: lugares que visitamos (devueltos por tool ´look´)
+    -succesful_actions: lista de tools ejecutadas en la partida con exito. (esto seria las tools que utilizamos y su resultado). Se deben aggregar elementos, pero no borrar los anteriores.
+    -failed_actions: lista de tools ejecutadas en la partida SIN exito. (esto seria las tools que utilizamos y su resultado). Se deben aggregar elementos, pero no borrar los anteriores.
+    -observations: Objetos que sabemos que existen y donde estan
+    -known_exits: salidas que se pueden tomar y desde donde
+"""
+
+
+MEMORY_SYSTEM_PROMPT = """
+        Sos un sistema de memoria para un agente que resuelve una sala de escape.
+
+        Tu única función es actualizar el estado estructurado de la partida.
+
+        NO tomes decisiones.
+        NO ejecutes herramientas.
+        NO propongas acciones.
+        NO inventes información.
+
+        Recibís:
+        1. un estado anterior;
+        2. uno o más eventos producidos por herramientas reales.
+
+        Schma:
+        -inventory: lista de objetos que tomamos (hay que agregarlos SOLO cuando la tool/function ´take´ se realiza con exito. NO agregues un objeto si solo se menciono como resultado de ´look´ o de ´examine´)
+        -current_location: ubicacion actual
+        -visited_locations: lugares que visitamos (devueltos por tool ´look´)
+        -succesful_actions: lista de tools ejecutadas en la partida con exito. (esto seria las tools que utilizamos y su resultado). Se deben aggregar elementos, pero no borrar los anteriores.
+        -failed_actions: lista de tools ejecutadas en la partida SIN exito. (esto seria las tools que utilizamos y su resultado). Se deben aggregar elementos, pero no borrar los anteriores.
+        -observations: Objetos que sabemos que existen y donde estan
+        -known_exits: salidas que se pueden tomar y desde donde
+
+
+        Debés devolver el estado COMPLETO actualizado mediante la herramienta final_result.
+
+        Reglas:
+
+        - look:  registrar la ubicación actual, objetos visibles, sus IDs y salidas.
+        - examine:   registrar la información descubierta sobre el objeto.
+        - take exitoso:   agregar el objeto al inventario.
+        - take fallido: no  agregar el objeto al inventario.
+        - go exitoso: actualizar la ubicación actual y registrar el movimiento.
+        - go fallido: no cambiar la ubicación.
+        - use: registrar la acción y si tuvo éxito o falló.
+        - Conservar acciones fallidas.
+        - Nunca inventar IDs.
+        - Nunca inventar objetos.
+        - Nunca inventar ubicaciones.
+        - Nunca inventar salidas.
+        - Mantener toda la información previa que siga siendo válida.
+        - NUNCA agregar un objeto al inventario si no se realizo un ´take´
+        """
+
+
 class MyAgent:
     def __init__(
         self,
@@ -310,6 +394,7 @@ class MyAgent:
         max_history_messages: int = 50,
         max_retries: int = 3,
         retry_backoff_base: float = 0.5,
+        use_summarizer: bool = False,
     ) -> None:
         """Inicializa el agente.
 
@@ -335,6 +420,13 @@ class MyAgent:
         retry_backoff_base : float
             Espera base (en segundos) del backoff exponencial entre
             reintentos: base * 2**intento. Poner 0 en tests.
+        use_summarizer : bool
+            Si es True, antes de cada llamada al LLM se re-deriva un
+            `GameState` estructurado (con una llamada LLM extra) y se inyecta
+            como contexto. Es la memoria "resumida" para M3. Por defecto está
+            APAGADO: M1/M2 y el modo ReAct puro no pagan ese costo. La
+            estrategia es ortogonal al tamaño de ventana (`max_history_messages`
+            se configura por separado).
         """
         self._llm = llm_client
         self._system = system_prompt
@@ -345,6 +437,20 @@ class MyAgent:
         self._tools={}
         self._schemas={}
         self.messages: list[dict[str, Any]] = []
+
+        # Summarizer de estado (M3): apagado por defecto. Cuando está activo,
+        # anexamos el addendum al system prompt para que el agente sepa leer el
+        # bloque "ESTADO ACTUAL DE LA PARTIDA".
+        self._use_summarizer = use_summarizer
+        self._state = GameState()
+        if use_summarizer:
+            self._system = system_prompt + SUMMARIZER_PROMPT_ADDENDUM
+
+        # Costo del summarizer contabilizado APARTE del agente principal, para
+        # que el experimento (resumen on/off) compare costos de forma justa.
+        # Se reinicia en cada `run()`. El eval lee estos campos tras `run()`.
+        self.memory_input_tokens = 0
+        self.memory_output_tokens = 0
 
     def register_tool(
         self,
@@ -392,7 +498,11 @@ class MyAgent:
 
         resultado = AgentResult(answer="")
         self.messages.append({"role": "user", "content": user_message})
-        
+
+        # Costo del summarizer de ESTA corrida (ver __init__): arranca en 0.
+        self.memory_input_tokens = 0
+        self.memory_output_tokens = 0
+
         # Esquemas de las herramientas a exponer al LLM
         tools = list(self._schemas.values()) if self._schemas else None
 
@@ -452,7 +562,11 @@ class MyAgent:
                     )
                 )
 
-            
+            # Summarizer (M3): re-derivar el estado estructurado a partir de la
+            # última interacción de herramientas, antes de la próxima llamada.
+            if self._use_summarizer:
+                self._state = self.update_memory()
+
             # 3) Nueva llamada al LLM con el historial actualizado.
             response = self._chat_con_reintentos(tools)
             self._acumular_tokens(resultado, response)
@@ -479,9 +593,18 @@ class MyAgent:
         """Llama a `chat` con la ventana de historial y reintentos."""
         ventana = self._windowed_messages()
 
-        for m in self.messages:
-            print(m)
-        print("----------------------------------------------------")
+        # Summarizer (M3): anteponemos el estado estructurado de la partida
+        # como contexto. Solo cuando el flag está activo; en el modo ReAct puro
+        # la ventana viaja intacta (M1/M2 no se ven afectados).
+        if self._use_summarizer:
+            state_message = {
+                "role": "user",
+                "content": (
+                    "ESTADO ACTUAL DE LA PARTIDA:\n"
+                    f"{self._state.model_dump_json(indent=2)}"
+                ),
+            }
+            ventana = [state_message] + ventana
 
         return self._con_reintentos(
             lambda: self._llm.chat(
@@ -631,6 +754,8 @@ class MyAgent:
         prompt: str,
         schema: Any,
         max_repair_attempts: int = 2,
+        system: str | None = None,
+        on_usage: Callable[[LLMResponse], None] | None = None,
     ) -> Any:
         """Pide al LLM una respuesta validada contra `schema`.
 
@@ -668,9 +793,14 @@ class MyAgent:
                 lambda: self._llm.chat(
                     messages=messages,
                     tools=[tool],
-                    system=self._system,
+                    system=system or self._system,
                 )
             )
+
+            # Contabilización opcional de tokens (p. ej. el summarizer suma su
+            # costo APARTE del agente principal).
+            if on_usage is not None:
+                on_usage(response)
 
             # CASO 1: modelo responde con texto libre
             if not response.tool_calls:
@@ -773,4 +903,108 @@ class MyAgent:
                 )
 
         raise RuntimeError(f"No se pudo obtener una respuesta estructurada valida")
+
+    # -----------------------------------------------------------------------
+    # Summarizer de estado (M3) — solo se usa con use_summarizer=True
+    # -----------------------------------------------------------------------
+
+    def _acumular_memory_tokens(self, response: LLMResponse) -> None:
+        """Suma los tokens de una llamada del summarizer a su contador aparte."""
+        if response.input_tokens is not None:
+            self.memory_input_tokens += response.input_tokens
+        if response.output_tokens is not None:
+            self.memory_output_tokens += response.output_tokens
+
+    def _last_tool_interaction(self) -> list[dict]:
+        """Obtiene el último bloque assistant(tool_calls) + tool results."""
+
+        last_assistant_idx = None
+
+        # Buscar desde el final el último assistant con tool_calls
+        for i in range(len(self.messages) - 1, -1, -1):
+            message = self.messages[i]
+
+            if (
+                message.get("role") == "assistant"
+                and message.get("tool_calls")
+            ):
+                last_assistant_idx = i
+                break
+
+        if last_assistant_idx is None:
+            return []
+
+        events = []
+
+        # Tomamos el assistant que realizó las tools
+        assistant_message = self.messages[last_assistant_idx]
+
+        events.append({
+            "role": "assistant",
+            "tool_calls": assistant_message["tool_calls"],
+        })
+
+        # Tomamos los tool results posteriores
+        for message in self.messages[last_assistant_idx + 1:]:
+            if message.get("role") == "tool":
+                events.append({
+                    "role": "tool",
+                    "tool_call_id": message.get("tool_call_id"),
+                    "content": message.get("content"),
+                })
+            else:
+                # Llegamos al siguiente turno del agente
+                break
+
+        return events
+
+    def update_memory(self) -> GameState:
+        """Re-deriva el `GameState` a partir de la última interacción de tools.
+
+        Hace una llamada LLM extra (vía `structured_call` con
+        `MEMORY_SYSTEM_PROMPT`), cuyo costo se contabiliza APARTE mediante
+        `_acumular_memory_tokens`. Si no hubo eventos nuevos, devuelve el
+        estado sin cambios.
+        """
+        events = self._last_tool_interaction()
+
+        if not events:
+            return self._state
+
+        prompt = f"""
+        Actualizá el estado de una partida de escape room.
+
+        ESTADO ACTUAL:
+        {self._state.model_dump_json(indent=2)}
+
+        ÚLTIMOS EVENTOS DE HERRAMIENTAS:
+        {json.dumps(events, indent=2, ensure_ascii=False)}
+
+        Actualizá el estado utilizando únicamente la información proporcionada.
+
+        Reglas:
+
+        - Devolvé el estado COMPLETO actualizado.
+        - No inventes información.
+        - Una acción solo es exitosa si el resultado de la tool indica que tuvo éxito.
+        - Un take exitoso agrega el objeto al inventario.
+        - Un take fallido NO agrega el objeto.
+        - Un go exitoso actualiza current_location.
+        - Un go fallido NO cambia current_location.
+        - Registrá los go exitosos en movement_history.
+        - Registrá las acciones realizadas en actions (tool mas objeto/s)
+        - Registrá información obtenida mediante look y examine en observations. (objetos visibles y donde estan)
+        - Registrá las salidas conocidas obtenidas mediante look o go.
+        - Conservá las acciones fallidas en actions.
+        - Conservá los IDs exactamente como aparecen.
+        - No inventes IDs.
+        """
+
+        return self.structured_call(
+            prompt=prompt,
+            schema=GameState,
+            system=MEMORY_SYSTEM_PROMPT,
+            max_repair_attempts=3,
+            on_usage=self._acumular_memory_tokens,
+        )
 

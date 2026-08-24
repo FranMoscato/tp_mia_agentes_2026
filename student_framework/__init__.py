@@ -53,21 +53,21 @@ def build_agent(config: dict[str, Any] | None = None) -> Agent:
     # ToolSchema.from_callable en el propio módulo de la herramienta) y se
     # registra en el agente. A partir de acá quedan expuestas al LLM en cada
     # llamada a chat(tools=...).
+    #
+    # M3: el runner de la sala de escape registra sus propios verbos
+    # (look/examine/take/use/go) y no quiere las tools de M1, así que puede
+    # pedir un agente "limpio" con `config["register_default_tools"] = False`.
+    # Por defecto se registran (M1/M2 dependen de esto).
+    if config.get("register_default_tools", True):
+        from student_framework.tools.calculator import calculadora, calculadora_schema
+        from student_framework.tools.file_reader import leer_archivo, leer_archivo_schema
+        from student_framework.tools.word_counter import (
+            contar_palabras,
+            contar_palabras_schema,
+        )
 
-    # # Registro de las tres herramientas obligatorias del M1. Cada una se
-    # # importa con su callable y su ToolSchema (derivado con
-    # # ToolSchema.from_callable en el propio módulo de la herramienta) y se
-    # # registra en el agente. A partir de acá quedan expuestas al LLM en cada
-    # # llamada a chat(tools=...).
-    # from student_framework.tools.calculator import calculadora, calculadora_schema
-    # from student_framework.tools.file_reader import leer_archivo, leer_archivo_schema
-    # from student_framework.tools.word_counter import (
-    #     contar_palabras,
-    #     contar_palabras_schema,
-    # )
-
-    # agent.register_tool(calculadora, calculadora_schema)        # 1. calculadora
-    # agent.register_tool(leer_archivo, leer_archivo_schema)      # 2. lector de archivos
-    # agent.register_tool(contar_palabras, contar_palabras_schema)  # 3. herramienta libre
+        agent.register_tool(calculadora, calculadora_schema)          # 1. calculadora
+        agent.register_tool(leer_archivo, leer_archivo_schema)        # 2. lector de archivos
+        agent.register_tool(contar_palabras, contar_palabras_schema)  # 3. herramienta libre
 
     return agent

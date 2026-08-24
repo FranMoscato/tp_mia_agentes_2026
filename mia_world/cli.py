@@ -90,7 +90,9 @@ def _cmd_run(args: argparse.Namespace) -> int:
         raise SystemExit(
             f"El módulo {args.module!r} no exporta `build_agent`."
         )
-    agent = module.build_agent()
+    # Agente "limpio": la sala de escape registra solo sus verbos
+    # (look/examine/take/use/go), sin las tools de M1 (calculadora, etc.).
+    agent = module.build_agent({"register_default_tools": False})
     for fn, schema in make_world_tools(world):
         agent.register_tool(fn, schema)
 

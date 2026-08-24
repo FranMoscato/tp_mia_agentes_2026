@@ -46,6 +46,11 @@ def build_agent(config: dict[str, Any] | None = None) -> Agent:
     if "retry_backoff_base" in config:
         kwargs["retry_backoff_base"] = config["retry_backoff_base"]
 
+    # Summarizer de estado (M3): opcional, apagado por defecto. El experimento
+    # "resumen on/off" se corre pasando use_summarizer por config.
+    if "use_summarizer" in config:
+        kwargs["use_summarizer"] = config["use_summarizer"]
+
     agent = MyAgent(**kwargs)
 
     # Registro de las tres herramientas obligatorias del M1. Cada una se

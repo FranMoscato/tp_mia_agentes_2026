@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import time
 from typing import Any, Callable
-
+from pydantic import BaseModel, Field
 from mia_agents.protocols import LLMClient
 from mia_agents.types import AgentResult, AgentStep, LLMResponse, ToolCall, ToolSchema
 from mia_agents.tool_schema import final_result_tool_schema,FINAL_RESULT_TOOL_NAME
@@ -48,6 +48,20 @@ _MARCADORES_TRANSITORIOS = (
     "temporarily",
 )
 
+### para memoria de game state-----------------------------------------------------------------
+from pydantic import BaseModel, Field
+
+class GameState(BaseModel):
+    inventory: list[str] = Field(default_factory=list)
+    current_location: str | None = None
+    visited_locations: list[str] = Field(default_factory=list)
+    succesful_actions: list[str] = Field(default_factory=list)
+    failed_actions: list[str] = Field(default_factory=list)
+    observations: list[str] = Field(default_factory=list)
+    known_exits: list[str] = Field(default_factory=list)
+
+### -------------------------------------------------------------------------------------------
+
 
 def _es_error_transitorio(exc: Exception) -> bool:
     """Decide si una excepción amerita reintento.
@@ -62,8 +76,8 @@ def _es_error_transitorio(exc: Exception) -> bool:
     return any(marca in texto for marca in _MARCADORES_TRANSITORIOS)
 
 SYSTEM_PROMPT = """
-Sos un agente que controla un personaje dentro de una sala de escape. Tu objetivo final es ABRIR LA PUERTA PRINCIPAL y salir de la habitación.
 
+Sos un agente que controla un personaje dentro de una sala de escape. Tu objetivo final es ABRIR LA PUERTA PRINCIPAL y salir de la habitación.
 
 **OBJETIVO FINAL Y PRONCIPAL: ** ABRIR LA PUERTA PRINCIPAL y salir de la habitación. 
 
@@ -71,19 +85,19 @@ GOLDEN RULE: Continua hasta ABRIR LA PUERTA PRINCIPAL. Abrir otros contenedores 
 
 Para lograrlo, debés explorar la habitación, identificar objetos, examinarlos, recoger los objetos necesarios y utilizarlos correctamente.
 
-## REGLA PRINCIPAL
+## REGLAS PRINCIPALES
 
-DEBÉS actuar paso a paso.
-
-NUNCA inventes información.
-NUNCA inventes IDs.
-NUNCA uses una herramienta si no tenés la información necesaria para hacerlo.
+1) DEBÉS actuar paso a paso.
+2) NUNCA inventes información.
+3) NUNCA inventes IDs.
+4) NUNCA uses una herramienta si no tenés la información necesaria para hacerlo.
+5) SIEMPRE debes respetar los schemas presentados de las tools y no proporcionar argumentos de mas o de menos para utilizarlas.
 
 ## ORDEN OBLIGATORIO DE ACCIONES
 
 Al comenzar una partida, seguí SIEMPRE este orden:
 
-1. Primero ejecutá `look`.
+1. Primero ejecutá `look` y ninguna otra herramienta en ese primer turno.
 2. ESPERÁ el resultado de `look`.
 3. Leé cuidadosamente los objetos y sus IDs que aparecen en el resultado.
 4. Solo después de recibir el resultado de `look`, podés decidir qué objeto examinar.
@@ -95,19 +109,11 @@ Al comenzar una partida, seguí SIEMPRE este orden:
 
 ## REGLA ABSOLUTA DE EJECUCIÓN SECUENCIAL
 
-ESTÁ PROHIBIDO GENERAR MÁS DE UNA TOOL CALL POR TURNO.
-
-Después de ejecutar una herramienta:
-1. DETENÉ completamente tu razonamiento.
-2. ESPERÁ el resultado de la herramienta.
-3. Analizá ese resultado.
-4. Recién entonces decidí la siguiente herramienta.
-
-NUNCA generes múltiples tool_calls en una misma respuesta.
+NUNCA generes múltiples tool_calls en una misma respuesta junto con un ´look´.
 
 Ejemplo INCORRECTO:
 
-tool_calls = [
+1)tool_calls = [
     look(),
     go(...),
     look(),
@@ -117,17 +123,17 @@ tool_calls = [
 
 Ejemplo CORRECTO:
 
-tool_calls = [
+1) tool_calls = [
     look()
 ]
 
-Después de recibir el resultado de look, generás UNA SOLA siguiente acción.
+2) Después de recibir el resultado de look, generás UNA SOLA siguiente acción.
 
 tool_calls = [
     go(direction="norte")
 ]
 
-Después de recibir el resultado de go, generás UNA SOLA siguiente acción.
+3)Después de recibir el resultado de go, generás UNA SOLA siguiente acción.
 
 tool_calls = [
     look()
@@ -145,13 +151,10 @@ Si todavía NO ejecutaste `look` en la partida:
 * NO ejecutes `use`.
 * NO ejecutes ninguna otra herramienta.
 
-Primero:
-
-`look`
-
-Después de recibir el resultado de `look`, recién podés continuar.
+Primero `look`, después de recibir el resultado de `look`, recién podés continuar. 
 
 NOTA: si se devuelven salidas, puedes utilizar la tool go para explorar otros ambientes.
+
 
 ## REGLA CRÍTICA SOBRE LOS IDs
 
@@ -159,9 +162,7 @@ Los objetos tienen IDs específicos, por ejemplo:
 
 `[id: <id_real>]`
 
-Los IDs son OBLIGATORIOS para las herramientas que los requieren.
-
-SOLO podés utilizar un ID si ese ID apareció explícitamente en un resultado anterior de una herramienta.
+Los IDs son OBLIGATORIOS para las herramientas que los requieren y SOLO podés utilizar un ID si ese ID apareció explícitamente en un resultado anterior de una herramienta.
 
 ESTÁ PROHIBIDO:
 
@@ -175,7 +176,7 @@ Ejemplo:
 
 Si `look` devuelve:
 
-`llave roja [id: <id_real>]`
+`objeto [id: <id_real>]`
 
 entonces podés usar:
 
@@ -183,10 +184,7 @@ entonces podés usar:
 
 Pero NO podés usar:
 
-`take(item="llave roja")`
-
-
-porque ese ID nunca fue proporcionado.
+`take(item="objeto")` --> ese ID nunca fue proporcionado.
 
 ## REGLA SOBRE `examine`
 
@@ -200,11 +198,11 @@ Ejemplo correcto:
 
 `examine(target="<id_real>")`
 
-NOTA: Si el objeto de un objeto cambia, por ejemplo un cofre que se abre, debes examinarlo otra vez.
-
 NUNCA uses:
 
 `examine(objeto="<id_real>")`
+
+**Nota importante**: Si el objeto de un objeto cambia, por ejemplo un cofre que se abre, debes examinarlo otra vez.
 
 ## REGLA SOBRE `take`
 
@@ -212,15 +210,9 @@ NUNCA uses:
 
 `item`
 
-Debés utilizar el ID exacto del objeto.
+Debés utilizar el ID exacto del objeto. Ejemplo: `take(item="<id_real>")`
 
-Ejemplo:
-
-`take(item="<id_real>")`
-
-NUNCA uses:
-
-`take(objeto="<id_real>")`
+NUNCA uses: `take(objeto="<id_real>")` --> no existe el parametro objeto
 
 ## REGLA SOBRE `use`
 
@@ -233,9 +225,7 @@ Ejemplo:
 
 `use(item="<id_real>", target="<id_real2>")` 
 
-El `item` debe ser un objeto que hayas recogido exitosamente con `take`.
-
-NO podés utilizar un objeto que simplemente hayas visto o examinado.
+El `item` debe ser un objeto que hayas recogido exitosamente con `take`. **NO** podés utilizar un objeto que simplemente hayas visto o examinado.
 
 ## REGLA CRÍTICA SOBRE `go`
 
@@ -275,19 +265,10 @@ NO INVENTES NOMBRES DE SALIDAS.
 
 ## REGLA SOBRE INVENTARIO
 
-Ver un objeto NO significa que lo poseas.
+1) Ver un objeto NO significa que lo poseas.
+2) Examinar un objeto NO significa que lo poseas.
+3) Solo poseés un objeto después de ejecutar exitosamente: `take(item="ID")`
 
-Examinar un objeto NO significa que lo poseas.
-
-Solo poseés un objeto después de ejecutar exitosamente:
-
-`take(item="ID")`
-
-Por lo tanto:
-
-VER → EXAMINAR → TOMAR → USAR
-
-es el flujo correcto cuando corresponde.
 
 Nunca hagas:
 
@@ -308,7 +289,6 @@ Si encontrás una llave y una cerradura, prestá atención a características co
 
 * color;
 * descripción;
-* ubicación;
 * relación entre los objetos.
 
 Una llave suele corresponder a una cerradura del mismo color.
@@ -332,7 +312,19 @@ Sin embargo, NO asumas que una llave sirve para una cerradura únicamente por su
 12. Si ya tenés suficiente información para realizar una acción válida, ejecutala.
 13. Si una herramienta devuelve un error, analizá el error y corregí la acción antes de continuar.
 14. Si hay otras salidas debes explorar otros ambientes antes de intentar abrir la puerta. IMPORTANTE.
+15. Presta atencion al 'ESTADO ACTUAL DE LA PARTIDA' ya que tiene informacion util para escapar. Contine una lista de acciones realizadas, consideralas antes de proponer una siguiente accion.
+
+SCHEMA DE 'ESTADO ACTUAL DE LA PARTIDA':
+
+    -inventory: lista de objetos que tomamos (hay que agregarlos SOLO cuando la tool/function ´take´ se realiza con exito. NO agregues un objeto si solo se menciono como resultado de ´look´ o de ´examine´)
+    -current_location: ubicacion actual
+    -visited_locations: lugares que visitamos (devueltos por tool ´look´)
+    -succesful_actions: lista de tools ejecutadas en la partida con exito. (esto seria las tools que utilizamos y su resultado). Se deben aggregar elementos, pero no borrar los anteriores.
+    -failed_actions: lista de tools ejecutadas en la partida SIN exito. (esto seria las tools que utilizamos y su resultado). Se deben aggregar elementos, pero no borrar los anteriores.
+    -observations: Objetos que sabemos que existen y donde estan
+    -known_exits: salidas que se pueden tomar y desde donde
 """
+
 
 
 class MyAgent:
@@ -341,7 +333,7 @@ class MyAgent:
         llm_client: LLMClient,
         system_prompt: str = SYSTEM_PROMPT,
         max_iterations: int = 20,
-        max_history_messages: int = 50,
+        max_history_messages: int = 20,
         max_retries: int = 3,
         retry_backoff_base: float = 0.5,
     ) -> None:
@@ -379,6 +371,7 @@ class MyAgent:
         self._tools={}
         self._schemas={}
         self.messages: list[dict[str, Any]] = []
+        self._state = GameState()  ### Nueva memoria del estado del juego
 
     def register_tool(
         self,
@@ -486,7 +479,7 @@ class MyAgent:
                     )
                 )
 
-            
+            self._state = self.update_memory()
             # 3) Nueva llamada al LLM con el historial actualizado.
             response = self._chat_con_reintentos(tools)
             self._acumular_tokens(resultado, response)
@@ -513,15 +506,27 @@ class MyAgent:
         """Llama a `chat` con la ventana de historial y reintentos."""
         ventana = self._windowed_messages()
 
-        for m in self.messages:
+
+        state_message = {
+            "role": "user",
+            "content": (
+                "ESTADO ACTUAL DE LA PARTIDA:\n"
+                f"{self._state.model_dump_json(indent=2)}"
+            ),
+        }
+
+        ventana = [state_message] + ventana
+
+        for m in ventana:
             print(m)
+
         print("----------------------------------------------------")
 
         return self._con_reintentos(
             lambda: self._llm.chat(
+                system=self._system,
                 messages=ventana,
                 tools=tools,
-                system=self._system,
             )
         )
 
@@ -665,6 +670,7 @@ class MyAgent:
         prompt: str,
         schema: Any,
         max_repair_attempts: int = 2,
+        system: str | None = None
     ) -> Any:
         """Pide al LLM una respuesta validada contra `schema`.
 
@@ -702,7 +708,7 @@ class MyAgent:
                 lambda: self._llm.chat(
                     messages=messages,
                     tools=[tool],
-                    system=self._system,
+                    system= system or self._system,
                 )
             )
 
@@ -807,4 +813,139 @@ class MyAgent:
                 )
 
         raise RuntimeError(f"No se pudo obtener una respuesta estructurada valida")
+
+    def _last_tool_interaction(self) -> list[dict]:
+        """Obtiene el último bloque assistant(tool_calls) + tool results."""
+
+        last_assistant_idx = None
+
+        # Buscar desde el final el último assistant con tool_calls
+        for i in range(len(self.messages) - 1, -1, -1):
+            message = self.messages[i]
+
+            if (
+                message.get("role") == "assistant"
+                and message.get("tool_calls")
+            ):
+                last_assistant_idx = i
+                break
+
+        if last_assistant_idx is None:
+            return []
+
+        events = []
+
+        # Tomamos el assistant que realizó las tools
+        assistant_message = self.messages[last_assistant_idx]
+
+        events.append({
+            "role": "assistant",
+            "tool_calls": assistant_message["tool_calls"],
+        })
+
+        # Tomamos los tool results posteriores
+        for message in self.messages[last_assistant_idx + 1:]:
+            if message.get("role") == "tool":
+                events.append({
+                    "role": "tool",
+                    "tool_call_id": message.get("tool_call_id"),
+                    "content": message.get("content"),
+                })
+            else:
+                # Llegamos al siguiente turno del agente
+                break
+
+        return events
+
+    def update_memory(self) -> GameState:
+        events = self._last_tool_interaction()
+
+        if not events:
+            return self._state
+
+        prompt = f"""
+        Actualizá el estado de una partida de escape room.
+
+        ESTADO ACTUAL:
+        {self._state.model_dump_json(indent=2)}
+
+        ÚLTIMOS EVENTOS DE HERRAMIENTAS:
+        {json.dumps(events, indent=2, ensure_ascii=False)}
+
+        Actualizá el estado utilizando únicamente la información proporcionada.
+
+        Reglas:
+
+        - Devolvé el estado COMPLETO actualizado.
+        - No inventes información.
+        - Una acción solo es exitosa si el resultado de la tool indica que tuvo éxito.
+        - Un take exitoso agrega el objeto al inventario.
+        - Un take fallido NO agrega el objeto.
+        - Un go exitoso actualiza current_location.
+        - Un go fallido NO cambia current_location.
+        - Registrá los go exitosos en movement_history.
+        - Registrá las acciones realizadas en actions (tool mas objeto/s)
+        - Registrá información obtenida mediante look y examine en observations. (objetos visibles y donde estan)
+        - Registrá las salidas conocidas obtenidas mediante look o go.
+        - Conservá las acciones fallidas en actions.
+        - Conservá los IDs exactamente como aparecen.
+        - No inventes IDs.
+        """
+
+        return self.structured_call(
+                prompt=prompt,
+                schema=GameState,
+                system=MEMORY_SYSTEM_PROMPT,
+                max_repair_attempts=3
+            )
+
+MEMORY_SYSTEM_PROMPT = """
+        Sos un sistema de memoria para un agente que resuelve una sala de escape.
+
+        Tu única función es actualizar el estado estructurado de la partida.
+
+        NO tomes decisiones.
+        NO ejecutes herramientas.
+        NO propongas acciones.
+        NO inventes información.
+
+        Recibís:
+        1. un estado anterior;
+        2. uno o más eventos producidos por herramientas reales.
+
+        Schma:
+        -inventory: lista de objetos que tomamos (hay que agregarlos SOLO cuando la tool/function ´take´ se realiza con exito. NO agregues un objeto si solo se menciono como resultado de ´look´ o de ´examine´)
+        -current_location: ubicacion actual
+        -visited_locations: lugares que visitamos (devueltos por tool ´look´)
+        -succesful_actions: lista de tools ejecutadas en la partida con exito. (esto seria las tools que utilizamos y su resultado). Se deben aggregar elementos, pero no borrar los anteriores.
+        -failed_actions: lista de tools ejecutadas en la partida SIN exito. (esto seria las tools que utilizamos y su resultado). Se deben aggregar elementos, pero no borrar los anteriores.
+        -observations: Objetos que sabemos que existen y donde estan
+        -known_exits: salidas que se pueden tomar y desde donde
+
+
+        Debés devolver el estado COMPLETO actualizado mediante la herramienta final_result. 
+
+        Reglas:
+
+        - look:  registrar la ubicación actual, objetos visibles, sus IDs y salidas.
+        - examine:   registrar la información descubierta sobre el objeto.
+        - take exitoso:   agregar el objeto al inventario.
+        - take fallido: no  agregar el objeto al inventario.
+        - go exitoso: actualizar la ubicación actual y registrar el movimiento.
+        - go fallido: no cambiar la ubicación.
+        - use: registrar la acción y si tuvo éxito o falló.
+        - Conservar acciones fallidas.
+        - Nunca inventar IDs.
+        - Nunca inventar objetos.
+        - Nunca inventar ubicaciones.
+        - Nunca inventar salidas.
+        - Mantener toda la información previa que siga siendo válida.
+        - NUNCA agregar un objeto al inventario si no se realizo un ´take´
+        """
+
+
+
+
+
+
 

@@ -53,7 +53,9 @@ def _visible_in_room(world: World) -> list[str]:
 
 
 def look() -> str:
-    """Describe la sala actual: items visibles (con sus ids) y el inventario."""
+    """Describe la sala actual: items visibles (con sus ids) y el inventario.
+    
+    ESTA FUNCION NO REQUIERE DE NINGUN ARGUMENTO"""
     raise NotImplementedError("usar make_world_tools(world)")
 
 
@@ -63,14 +65,18 @@ def examine(
         Field(description="Id del objeto a examinar (p. ej. 'alfombra')."),
     ],
 ) -> str:
-    """Examina un objeto visible o del inventario; si es contenedor, revela su contenido."""
+    """Examina un objeto visible o del inventario; si es contenedor, revela su contenido.
+    
+    REQUIERE SOLO UN ARGUMENTOS: target """
     raise NotImplementedError("usar make_world_tools(world)")
 
 
 def take(
     item: Annotated[str, Field(description="Id del objeto a tomar.")],
 ) -> str:
-    """Toma un objeto visible y lo añade al inventario."""
+    """Toma un objeto visible y lo añade al inventario.
+    
+    REQUIERE SOLO UN ARGUMENTOS: item """
     raise NotImplementedError("usar make_world_tools(world)")
 
 
@@ -84,7 +90,8 @@ def use(
         Field(description="Id del objeto de la sala sobre el que aplicarlo."),
     ],
 ) -> str:
-    """Usa un objeto del inventario sobre un objeto visible (p. ej. llave en puerta)."""
+    """Usa un objeto del inventario sobre un objeto visible (p. ej. llave en puerta).
+    REQUIERE SOLO DOS ARGUMENTOS: item Y target"""
     raise NotImplementedError("usar make_world_tools(world)")
 
 
@@ -93,8 +100,8 @@ def go(
         str,
         Field(
             description=(
-                "Dirección de la salida a tomar desde la sala actual "
-                "(p. ej. 'norte'). Usá `look` para ver las salidas disponibles."
+                "Dirección de la salida a tomar desde la sala actual (p. ej. 'norte'). Usá `look` para ver las salidas disponibles." \
+                "REQUIERE SOLO UN ARGUMENTOS: direction"
             )
         ),
     ],

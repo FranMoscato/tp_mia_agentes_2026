@@ -343,19 +343,26 @@ def judge_case(
 
 def judge_cases(
     cases: list[dict[str, Any]], module: Any, judge_model: str | None = None,
-    per_criterion: bool = False,
+    per_criterion: bool = False, judge_provider: str = "ollama",
 ) -> list[dict[str, Any]]:
     """Puntúa todos los casos con un judge 'limpio'.
 
     `judge_model` fuerza un modelo **distinto del agente** (evita self-preference;
-    idealmente más capaz). Sin él, usa el proveedor del entorno. `per_criterion`
-    activa el modo 4.4 (opción; ver §3.4 del informe).
+    idealmente más capaz). `judge_provider` elige el proveedor de ese judge
+    (`ollama` u `bedrock`), de modo que se pueda correr el próximo paso #1 del
+    informe —un judge **fuerte** en Bedrock (`nova-pro` juzgando a `nova-lite`)—.
+    Sin `judge_model`, usa el proveedor del entorno (mismo modelo que el agente,
+    NO recomendado: self-preference). `per_criterion` activa el modo 4.4.
     """
     config: dict[str, Any] = {"register_default_tools": False}
     if judge_model:
-        from mia_agents.llm_client import LLMClient, OllamaProvider
+        from mia_agents.llm_client import LLMClient, BedrockProvider, OllamaProvider
 
-        config["llm_client"] = LLMClient(OllamaProvider(model=judge_model))
+        if judge_provider == "bedrock":
+            provider = BedrockProvider(model=judge_model)
+        else:
+            provider = OllamaProvider(model=judge_model)
+        config["llm_client"] = LLMClient(provider)
     judge_agent = module.build_agent(config)
     judged = []
     for c in cases:
@@ -379,7 +386,13 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--module", default="student_framework")
     parser.add_argument(
         "--judge-model", default=None,
-        help="Modelo del judge (Ollama). DEBE ser distinto del agente evaluado.",
+        help="Modelo del judge. DEBE ser distinto del agente evaluado. "
+             "Ej: llama3.2 (ollama) o us.amazon.nova-pro-v1:0 (bedrock).",
+    )
+    parser.add_argument(
+        "--judge-provider", default="ollama", choices=["ollama", "bedrock"],
+        help="Proveedor del judge. Usá 'bedrock' con --judge-model nova-pro para "
+             "el judge fuerte del próximo paso #1 (nova-pro juzgando a nova-lite).",
     )
     parser.add_argument(
         "--per-criterion", action="store_true",
@@ -393,14 +406,22 @@ def main(argv: list[str] | None = None) -> int:
 
     module = importlib.import_module(args.module)
     judged = judge_cases(cases, module, judge_model=args.judge_model,
-                         per_criterion=args.per_criterion)
+                         per_criterion=args.per_criterion,
+                         judge_provider=args.judge_provider)
 
     out_path = cases_path.parent / "judged.jsonl"
     with out_path.open("w", encoding="utf-8") as fh:
         for j in judged:
             fh.write(json.dumps(j, ensure_ascii=False) + "\n")
 
-    agg = {"judge_model": args.judge_model, "by_config": aggregate_scores(judged)}
+    # Versionamos el judge (la clase: "el judge también se versiona:
+    # prompt+few-shot+modelo"). Sin esto, un veredicto no dice qué judge lo produjo.
+    agg = {
+        "judge_model": args.judge_model,
+        "judge_provider": args.judge_provider if args.judge_model else "env",
+        "mode": "per_criterion" if args.per_criterion else "single_call",
+        "by_config": aggregate_scores(judged),
+    }
     (cases_path.parent / "judge_summary.json").write_text(
         json.dumps(agg, indent=2, ensure_ascii=False), encoding="utf-8"
     )

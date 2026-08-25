@@ -650,7 +650,9 @@ despegar la accuracy—.
    determinística (κ ≈ 0: el judge chico no es confiable, §3.4). Lo que falta
    depende del próximo paso: un judge **más capaz** (`nova-pro`) y **trazas con
    variación real** (éxitos, trayectorias largas) para que la kappa deje de ser
-   degenerada y recién ahí confiar en sus puntajes.
+   degenerada y recién ahí confiar en sus puntajes. **El wiring ya está**
+   (`--judge-provider bedrock --judge-model nova-pro`, ver Apéndice A); solo falta
+   el lease.
 5. **Memoria más allá de la de trabajo (CoALA).** Hoy el agente usa solo
    **memoria de trabajo** (la ventana). Sumar memoria **episódica** (aprender
    entre escenarios: "en la sala anterior la llave estaba bajo la alfombra") o
@@ -679,6 +681,14 @@ python eval/judge.py eval/results/<timestamp>/cases.jsonl --judge-model llama3.2
 # Meta-eval del judge: kappa de Cohen vs. referencia determinística (sobre el golden)
 python eval/judge.py eval/golden/cases.jsonl --judge-model llama3.2
 python eval/kappa.py  eval/golden/cases.jsonl
+
+# Judge FUERTE del próximo paso #1 (nova-pro juzgando a nova-lite, requiere Bedrock)
+python eval/judge.py eval/golden/cases.jsonl \
+  --judge-provider bedrock --judge-model us.amazon.nova-pro-v1:0
+python eval/kappa.py  eval/golden/cases.jsonl
+
+# Reproducir el hallazgo: el modo per-criterio (4.4) colapsa con judge débil
+python eval/judge.py eval/golden/cases.jsonl --judge-model llama3.2 --per-criterion
 
 # Gráficos de UNA corrida
 python scripts/generar_graficos_m3.py

@@ -560,17 +560,21 @@ def run_one(
 
     # Ablación de prompt (experimento #3): si el config pide el prompt genérico,
     # lo fijamos ANTES de la inyección del prompt de sala de escape, de modo que
-    # esta última no lo pise.
+    # esta última no lo pise. `prompt_version` queda registrado POR CASO (no solo
+    # en el meta global) para que la ablación sea auto-documentada.
+    prompt_version: str | None = None
     if build_config.pop("prompt_generico", False):
         generico = getattr(module, "SYSTEM_PROMPT", None)
         if generico is not None:
             build_config["system_prompt"] = generico
+        prompt_version = "generico"
 
     # Inyectamos el system prompt de la sala de escape (el default del agente es
     # genérico). Si el módulo no lo expone, el config no lo fuerza.
     escape_prompt = getattr(module, "ESCAPE_ROOM_SYSTEM_PROMPT", None)
     if escape_prompt is not None and "system_prompt" not in build_config:
         build_config["system_prompt"] = escape_prompt
+        prompt_version = getattr(module, "ESCAPE_ROOM_SYSTEM_PROMPT_VERSION", None)
 
     agent = module.build_agent(build_config)
     for fn, schema in make_world_tools(world):
@@ -602,6 +606,7 @@ def run_one(
         "scenario": scenario.id,
         "difficulty": scenario.difficulty,
         "config": config_name,
+        "prompt_version": prompt_version,
         "repeat": repeat,
         "optimal_calls": optimal_calls,
         "goal_achieved": bool(achieved),

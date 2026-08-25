@@ -152,7 +152,7 @@ cada métrica viaja con su dispersión (pass^k, IC de Wilson, repeats).
 | Métrica | Qué mide | Por qué la elegimos |
 |---|---|---|
 | **Accuracy** (con **IC de Wilson 95%**) | Fracción de casos resueltos | Es la medida directa de éxito. Reportamos el intervalo de Wilson porque *"una corrida no es una medición"*: con 8 escenarios y pocos repeats, el intervalo es más honesto que un puntaje pelado (y Wilson se porta mejor que la normal cerca de 0/1). |
-| **pass^k** | Resolver el escenario en **todos** los k intentos | El agente actúa **sin supervisión**, así que lo relevante no es "alguna vez lo logró" sino "lo logra de forma consistente". pass^k castiga la varianza que la accuracy promedio esconde. |
+| **pass@k / pass^k** | pass@k: resolver en **al menos uno** de k intentos (capacidad). pass^k: resolverlo en **todos** (confiabilidad) | Los reportamos **juntos** porque la brecha entre ambos **es** la varianza (*"puede resolverlo"* vs. *"lo resuelve siempre"*). Para un agente que actúa **sin supervisión** manda pass^k (τ-bench); pass@k (de HumanEval) sería la métrica correcta solo si un humano pudiera reintentar/elegir —que no es nuestro caso—. |
 | **Overhead vs. óptimo** | `tool_calls / óptimo`, sobre los resueltos | Mide **eficiencia**: cuánto se aleja del camino ideal. El óptimo **no se hardcodea**: se **deriva por BFS** sobre el grafo de estados ([`eval/optimal.py`](eval/optimal.py)), y coincide con el enunciado en los 8/8 escenarios (cross-validación). |
 | **Tokens por caso resuelto** | Tokens totales (incl. fallidos) / resueltos | El costo relevante es *"cuánto cuesta un éxito"*, no el promedio por corrida: un agente que falla barato no es más barato si nunca resuelve. Lo medimos en **tokens** (moneda independiente del proveedor) porque con Ollama el costo en USD es $0; el USD es un derivado directo que se "enciende" solo al correr con un proveedor pago (Bedrock). Separamos tokens de **agente** vs. **summarizer**. |
 | **Latencia p50 / p95** | Percentiles de wall-clock por caso | La clase es explícita: *"nunca promedio"*. Los percentiles muestran la cola (p95), que es donde vive la mala experiencia. |
@@ -229,14 +229,18 @@ indistinguibles. El núcleo de métricas, la búsqueda del óptimo y el judge es
 
 Cada config corre los 8 escenarios × 3 repeats = 24 casos.
 
-| Config | Accuracy (IC95%) | pass^k | Varianza (std) | Latencia p50/p95 (s) |
+| Config | Accuracy (IC95%) | pass@k / pass^k | Varianza (std) | Latencia p50/p95 (s) |
 |---|---:|---:|---:|---:|
-| `react` | 0/24 [0.0, 0.14]† | 0/8† | 0.0 | 2.7 / 6.1 |
-| `summarizer` | 0/24 [0.0, 0.14]† | 0/8† | 0.0 | **25.9 / 50.1** |
-| `gate` | 0/24 [0.0, 0.14]† | 0/8† | 0.0 | 3.6 / 5.3 |
+| `react` | 0/24 [0.0, 0.14]† | 0/8 / 0/8† | 0.0 | 2.7 / 6.1 |
+| `summarizer` | 0/24 [0.0, 0.14]† | 0/8 / 0/8† | 0.0 | **25.9 / 50.1** |
+| `gate` | 0/24 [0.0, 0.14]† | 0/8 / 0/8† | 0.0 | 3.6 / 5.3 |
 
-Con este modelo **ninguna configuración abre una puerta**, y la **varianza entre
-repeats es 0**: no es *flaky*, falla de forma **consistente**. El techo lo pone
+Con este modelo **ninguna configuración abre una puerta**: `pass@k` (capacidad) y
+`pass^k` (confiabilidad) **coinciden en 0/8** —ni siquiera "puede" resolverlo una
+vez—. La brecha entre ambos recién aparece con un modelo que sí resuelve algo
+(`llama3.2 + summarizer`, §3.5: `pass@k` 1/8 vs. `pass^k` 0/8 — *puede* con el
+escenario fácil, pero no de forma consistente). La **varianza entre repeats es 0**:
+no es *flaky*, falla de forma **consistente**. El techo lo pone
 la disciplina de tool-calling, no el framework (§3.3). (El único éxito que vimos
 —`study-with-key` en un smoke suelto— no se repitió en 3 intentos: 0/3.)
 
@@ -254,6 +258,18 @@ config, que es donde los experimentos separan aguas (§3.3, §4).
 **Óptimo por escenario (BFS, = enunciado):** study-with-key 3 · color-locks 11 ·
 apartment-keys 7 · library-search 7 · office-sequence 13 · extreme-archive 4 ·
 vault-combination 21 · backtracking-vault 18.
+
+**Higiene de datos: split dev / holdout.** Para no sobreajustar prompt/gate a
+escenarios concretos, partimos los 8 en **dev** (`study-with-key`, `color-locks`,
+`library-search`, `extreme-archive` —uno por dificultad—) y **holdout**
+(`apartment-keys`, `office-sequence`, `vault-combination`, `backtracking-vault`),
+y **iteramos solo sobre dev** (el holdout se mira al final). Nuestras decisiones
+—prompt `escape-v1`, gate, summarizer— son **genéricas** (no dependen de ningún
+escenario), así que no hay riesgo real de overfitting; el holdout lo confirma:
+con `qwen` es 0/4 en dev **y** 0/4 en holdout, y el único bolsillo de éxito de
+todo el barrido (`llama3.2 + summarizer`, §3.5) cae en **dev** (`study-with-key`,
+el más fácil), con holdout uniformemente 0/4. En otras palabras, lo poco que se
+resuelve es el escenario trivial, no un artefacto de haber ajustado a casos vistos.
 
 ### 3.3 Análisis de errores (sobre trazas reales)
 
@@ -352,29 +368,48 @@ self-preference" —eso es un sesgo de *puntaje*, que no medimos—, sino que
 **`llama3.2` es un judge más confiable para *emitir* el veredicto estructurado**
 (un modelo mejor en tool-calling).
 
-**Meta-eval: ¿es confiable el judge? (kappa, medido).** Corrimos la meta-eval del
+**Meta-eval: ¿es confiable el judge? (kappa).** Corrimos la meta-eval del
 enunciado sobre el golden set (8 trazas reales del piloto `nova-lite`,
-[`eval/golden/`](eval/golden/)): comparamos el veredicto del judge (`llama3.2`)
-contra una **referencia determinística** derivada de propiedades objetivas de la
-traza —orden `look`/`examine` antes de actuar, `tool_error_count`, repeticiones—
+[`eval/golden/`](eval/golden/)): comparamos el veredicto del judge contra una
+**referencia determinística** derivada de propiedades objetivas de la traza
+—orden `look`/`examine` antes de actuar, `tool_error_count`, repeticiones—
 (`reference_verdict` en [`eval/judge.py`](eval/judge.py)), con la **kappa de
-Cohen** por criterio. La referencia es código, no otro juicio subjetivo ni el
-mismo LLM: evita la circularidad. Resultado: **κ ≈ 0 en los tres criterios**
-(`exploracion_ordenada` **0.0**, `acciones_apoyadas` **0.0**,
-`sin_redundancia_evitable` **−0.2**). El judge **no acuerda con la referencia
-mejor que el azar**: satura marcando `exploracion_ordenada`=NO en las 8 trazas
-(no discrimina) y hasta reporta "acciones sin apoyo" en trazas con **cero
-tool-errors** (alucina el defecto). Es **evidencia medida** del techo de capacidad
-que sospechábamos —un judge tan débil como el agente no es confiable—, así que los
-scores de la tabla de arriba hay que tomarlos con pinzas.
+Cohen** por criterio. La referencia es código (no otro juicio subjetivo ni el
+mismo LLM): evita la circularidad, y es uno de los **dos golden sets** que
+distingue la clase —el *del judge* (output + etiqueta), no el *del agente*
+(tarea + comportamiento esperado)—. Resultado: **κ orbita 0** —entre **−0.36 y
++0.33** según el criterio y la corrida, **nunca cerca de la banda trabajable
+(0.6–0.8)**—. Es **exactamente el ejemplo canónico de la clase**: un judge que
+marca `exploracion_ordenada`=NO en casi todas las trazas parece "consistente"
+(alta exactitud aparente) pero da κ≈0 —el acuerdo por azar ya lograba eso—; y
+hasta reporta "acciones sin apoyo" en trazas con **cero tool-errors** (alucina el
+defecto que debía detectar). Evidencia **medida** del techo de capacidad: un judge
+tan débil como el agente no es confiable, así que los scores de la tabla van con
+pinzas.
 
-*Caveats del kappa.* n=8 y todas fallidas (trayectorias cortas): la referencia
-satura en algunos criterios (p. ej. `acciones_apoyadas` da SÍ en las 8 porque
-ninguna acción falló), así que parte de los κ=0 son **degenerados por falta de
-varianza**, no solo desacuerdo genuino. El self-preference (mismas trazas bajo
-judge propio vs. ajeno) **sigue sin medirse** (§5). Una calibración definitiva
-necesita un judge fuerte (`nova-pro`) y trazas con variación real (éxitos,
-trayectorias largas). Reproducible: `python eval/kappa.py eval/golden/cases.jsonl`.
+**Aplicamos el rediseño de la clase (4.4) — y falló de una forma reveladora.** La
+clase recomienda **una llamada por criterio** + few-shot + **razonar antes de
+decidir**. Lo implementamos (`--per-criterion` en [`eval/judge.py`](eval/judge.py))
+y con el judge local (`llama3.2`) la **cobertura se derrumbó a 0/8**: pedirle
+*razonar antes* lo hace responder en **prosa** en vez de llamar la tool
+`final_result` —el mismísimo `prosa_en_vez_de_tool` que el judge existe para
+detectar (§3.3)—, y triplicar las llamadas multiplica la exposición a esa falla.
+La lección es la premisa que la clase da por sentada y nosotros no tenemos: el
+judge debe correr **offline, con un modelo capaz y prompt-caching**; con un modelo
+chico, el diseño teóricamente mejor es en la práctica **peor**. Por eso el modo por
+defecto es single-call (cobertura ~96%) y el per-criterio queda como opción para
+**reproducir el hallazgo** — otro argumento medido para el judge fuerte (`nova-pro`).
+
+*Caveats y una contaminación honesta.* (1) n=8 y todas fallidas → la referencia
+satura en algún criterio (`acciones_apoyadas` da SÍ en las 8 porque ninguna acción
+falló), así que parte de los κ≈0 son degenerados por falta de varianza. (2)
+**Entrenar para el examen:** el `ESCAPE_ROOM_SYSTEM_PROMPT` le *ordena* al agente
+explorar en orden (`look`→`examine`→…), que es justo lo que el criterio
+`exploracion_ordenada` puntúa —pasar una dimensión blanda al prompt del agente es,
+en términos de la clase, *entrenar para el examen*; lo declaramos como límite—. (3)
+El self-preference (mismas trazas bajo judge propio vs. ajeno) sigue sin medirse.
+Una calibración definitiva necesita un judge fuerte y trazas con variación real.
+Reproducible: `python eval/kappa.py eval/golden/cases.jsonl`.
 
 ### 3.5 Comparación cross-modelo / proveedor
 
@@ -465,9 +500,15 @@ Es justamente la métrica que se vuelve central con un modelo capaz en Bedrock.
 
 ## 4. Experimentos
 
-Dos experimentos, cada uno aislando **una** pieza del framework. Todos corren
-sobre el mismo dataset y con el mismo `max_iterations`; solo cambia el eje bajo
-estudio (los demás quedan fijos).
+Tres experimentos, cada uno aislando **una** pieza del framework: memoria (§4.1),
+gate (§4.2) y prompt (§4.3). Son **comparaciones apareadas** en el sentido de la
+clase —*mismos escenarios, misma N (3 repeats), mismo entorno y modelo*—; solo
+cambia el eje bajo estudio, los demás quedan fijos. Eso es lo que permite atribuir
+una diferencia a la pieza y no al ruido. Salvedad de rigor: con la accuracy en 0/8
+las diferencias que reportamos son de **perfil de fallo**, no de accuracy, y las
+leemos como **descriptivas** —con n=8, *"una diferencia de pocos puntos no es una
+diferencia"*; la comparación estadística recién tiene sentido cuando Bedrock haga
+despegar la accuracy—.
 
 ### 4.1 Experimento 1 — Resumen de estado (summarizer on/off)
 
@@ -519,6 +560,34 @@ estudio (los demás quedan fijos).
   solo —eso requiere un modelo que llame herramientas—, pero es un **piso de
   garantías gratis** sobre el que ese modelo rendiría mejor. Confirma la máxima:
   *un `if` garantiza lo que ningún prompt garantiza*.
+
+### 4.3 Experimento 3 — Estrategia de prompting (escape-v1 vs. genérico)
+
+- **Qué cambiamos.** `react` usa el prompt especializado `escape-v1` (~200 líneas
+  de reglas de sala de escape) vs. `react_generico`, que usa el **prompt genérico
+  de M1/M2** ("sos un asistente que usa herramientas"). `--configs
+  react,react_generico`. Corrida **acotada** (4 escenarios, `--repeats 1`,
+  `--max-iterations 12`) para no colgar el proveedor local; ambos brazos son
+  idénticos salvo el prompt (comparación apareada).
+- **Hipótesis.** `escape-v1` está lleno de reglas anti-prosa ("emití `tool_calls`,
+  no texto"), así que debería **reducir** `prosa_en_vez_de_tool`, el modo dominante.
+- **Qué miramos.** Perfil de fallo (prosa vs. otros), cantidad de tool-calls,
+  acciones inválidas.
+- **Resultado.** Ambos **0/4**: el prompt especializado **no rescata** al modelo
+  débil. Y la hipótesis **no se cumple** —`escape-v1` ni siquiera baja la prosa
+  (4/4 vs 3/4 del genérico)—. Lo que sí cambia es **el perfil**: `escape-v1` se
+  rinde **cauto y temprano** (**1.5** tool-calls de media, **0** acciones
+  inválidas, prosa por *inversión de rol*), mientras el genérico **actúa más pero
+  desprolijo** (**4.25** tool-calls, `invalid_action_rate` **0.12**, un
+  `tool_error`). El prompt de sala de escape compra **disciplina** (no inventa, no
+  se equivoca de objeto) a costa de rendirse antes; el genérico empuja a intentar
+  más, al costo de errores.
+- **Conclusión.** El prompt importa para **cómo** falla, no para **si** resuelve
+  —igual que el gate y el summarizer: con este modelo el techo es el modelo, no el
+  framework—. Salvedad de rigor: n=4, `repeats 1`, tope 12 → **descriptivo, no
+  significativo**. Con un modelo capaz (Bedrock) la pregunta interesante es si esa
+  disciplina del prompt especializado se traduce en **accuracy**, no solo en
+  perfil de fallo.
 
 ---
 
@@ -600,6 +669,9 @@ OLLAMA_HOST=http://localhost:11434 OLLAMA_MODEL=qwen2.5:3b \
 
 # --- Con Bedrock (modelo fuerte; requiere lease + nova-lite habilitado) ---
 python eval/run.py --repeats 3          # toma el provider del .env
+
+# Experimento 3 (ablación de prompt): escape-v1 vs. genérico
+python eval/run.py --configs react,react_generico --repeats 1 --max-iterations 12
 
 # Dimensión cualitativa (LLM-as-judge) sobre una corrida (judge DISTINTO del agente)
 python eval/judge.py eval/results/<timestamp>/cases.jsonl --judge-model llama3.2

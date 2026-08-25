@@ -250,8 +250,9 @@ resultado.answer = response.content or ""
 
 Se cuenta cada llamada al LLM en `llamadas` (empieza en 1 por la primera llamada
 previa al bucle). El bucle solo continúa si `llamadas < self._max_iterations`
-(por defecto **10**). Así, aunque el LLM pida herramientas indefinidamente, se
-hacen **como máximo `max_iterations` llamadas** y luego se corta.
+(por defecto **20**; el runner de M3 lo sube a 30, y los tests lo fijan explícito).
+Así, aunque el LLM pida herramientas indefinidamente, se hacen **como máximo
+`max_iterations` llamadas** y luego se corta.
 
 ### 5.3 Qué pasa al alcanzar el límite
 

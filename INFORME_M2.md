@@ -14,11 +14,12 @@ fachada externa (`build_agent`, `register_tool`, `run`). Esas tres capacidades n
 son abstractas: son **exactamente** lo que la sala de escape de M3 va a exigir —un
 mundo *estado-full* donde hay que recordar el mapa y volver, modelos chicos que a
 veces devuelven prosa en vez de tool-calls, y trayectorias largas de muchos
-pasos—. M2 le da al agente lo que necesita para jugar; M3 lo pone a jugar. Toda la lógica nueva
-vive **en el agente** (`student_framework/agent.py`) y en las **herramientas**
-(`student_framework/tools/`); el cliente LLM (`mia_agents/llm_client.py`) sigue
-intacto, tal como exige la consigna para poder correr los tests con
-`MockLLMClient`.
+pasos—. M2 le da al agente lo que necesita para jugar; M3 lo pone a jugar.
+
+Toda la lógica nueva vive **en el agente** (`student_framework/agent.py`) y en las
+**herramientas** (`student_framework/tools/`); el cliente LLM
+(`mia_agents/llm_client.py`) sigue intacto, tal como exige la consigna para poder
+correr los tests con `MockLLMClient`.
 
 Lo implementado:
 

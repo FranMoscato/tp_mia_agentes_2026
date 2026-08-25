@@ -72,6 +72,11 @@ CONFIGS: dict[str, dict[str, Any]] = {
     # gate determinístico. `use_gate` lo consume run_one (construye el gate
     # cerrado sobre el world del escenario), no build_agent.
     "gate": {"use_summarizer": False, "use_gate": True},
+    # Experimento #3 (ablación de prompt): "react" usa el prompt especializado
+    # `escape-v1`; "react_generico" usa el prompt GENÉRICO de M1/M2 (asistente que
+    # usa tools). Comparar aísla cuánto aporta el prompt de sala de escape.
+    # `prompt_generico` lo consume run_one (no build_agent).
+    "react_generico": {"use_summarizer": False, "prompt_generico": True},
 }
 
 # Tope de iteraciones para el eval. El default del agente (20) no alcanza para
@@ -296,6 +301,14 @@ def summarize(
             1 for v in by_scen.values() if v and all(x["goal_achieved"] for x in v)
         )
         pass_hat_k = round(pass_k_scen / len(by_scen), 3) if by_scen else None
+        # pass@k (CAPACIDAD): resolver el escenario en AL MENOS UNO de los k
+        # intentos. La brecha pass@k − pass^k ES la varianza: "puede resolverlo"
+        # vs "lo resuelve siempre". Para un agente sin supervisión manda pass^k;
+        # reportamos ambos para hacer explícita esa brecha.
+        pass_at_k_scen = sum(
+            1 for v in by_scen.values() if v and any(x["goal_achieved"] for x in v)
+        )
+        pass_at_k = round(pass_at_k_scen / len(by_scen), 3) if by_scen else None
 
         # Costo POR CASO RESUELTO (no por corrida): tokens totales / resueltos.
         tokens_totales = sum(
@@ -361,8 +374,10 @@ def summarize(
             "accuracy": round(len(exitosos) / n, 3) if n else None,
             "accuracy_ci95": _wilson_ci(len(exitosos), n),
             "pass_hat_k": pass_hat_k,
+            "pass_at_k": pass_at_k,
             "k": k,
             "pass_k_scenarios": f"{pass_k_scen}/{len(by_scen)}",
+            "pass_at_k_scenarios": f"{pass_at_k_scen}/{len(by_scen)}",
             "avg_calls_overhead_vs_optimal": _mean(overhead),
             "avg_tool_calls": _mean([c["tool_calls"] for c in sub]),
             "latency_p50_s": _percentile(latencias, 0.50),
@@ -431,10 +446,11 @@ def report_md(summary: dict[str, Any], meta: dict[str, Any]) -> str:
     lines.append("## Métricas por configuración")
     lines.append("")
     lines.append("_Latencia en percentiles (nunca promedio); costo por caso resuelto; "
-                 "pass^k = resolver el escenario en los k intentos._")
+                 "pass@k = resolver en AL MENOS UNO de los k intentos (capacidad); "
+                 "pass^k = resolver en TODOS (confiabilidad)._")
     lines.append("")
     header = (
-        "| Config | Accuracy (IC95%) | pass^k | Overhead vs óptimo | "
+        "| Config | Accuracy (IC95%) | pass@k / pass^k | Overhead vs óptimo | "
         "Tokens/resuelto | Latencia p50/p95 (s) |"
     )
     lines.append(header)
@@ -445,7 +461,7 @@ def report_md(summary: dict[str, Any], meta: dict[str, Any]) -> str:
         ci = m["accuracy_ci95"]
         ci_txt = f" [{ci[0]}, {ci[1]}]" if ci and ci[0] is not None else ""
         passk_txt = (
-            f"{m['pass_hat_k']} ({m['pass_k_scenarios']}, k={m['k']})"
+            f"{m.get('pass_at_k')} / {m['pass_hat_k']} (k={m['k']})"
             if m["pass_hat_k"] is not None else "—"
         )
         lines.append(
@@ -541,6 +557,14 @@ def run_one(
     # cerrado sobre el world de ESTE escenario y lo pasamos como callable.
     if build_config.pop("use_gate", False):
         build_config["tool_gate"] = build_escape_gate(world)
+
+    # Ablación de prompt (experimento #3): si el config pide el prompt genérico,
+    # lo fijamos ANTES de la inyección del prompt de sala de escape, de modo que
+    # esta última no lo pise.
+    if build_config.pop("prompt_generico", False):
+        generico = getattr(module, "SYSTEM_PROMPT", None)
+        if generico is not None:
+            build_config["system_prompt"] = generico
 
     # Inyectamos el system prompt de la sala de escape (el default del agente es
     # genérico). Si el módulo no lo expone, el config no lo fuerza.

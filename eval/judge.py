@@ -41,24 +41,115 @@ sys.path.insert(0, str(_REPO_ROOT))
 # Rúbrica y schema del veredicto
 # ---------------------------------------------------------------------------
 
-# Checklist BINARIO (no escala 1-5): la clase recomienda varios sí/no por
-# defecto —una escala ordinal se amontona en el medio (tendencia central) y
-# cuesta reproducirla; los sí/no son reproducibles y dicen QUÉ falló—. Cada ítem
-# es un juicio holístico sobre el trace (no algo que el código ya verifica).
-RUBRICA_EXPLORACION = """\
-Respondé SÍ/NO a cada criterio de CALIDAD DE LA EXPLORACIÓN (no si resolvió, eso
-se verifica por código aparte):
-  - exploracion_ordenada: ¿observó (look/examine) antes de actuar, sin saltar a
-    ciegas a take/use/go?
-  - acciones_apoyadas: ¿cada acción se apoya en algo observado antes (no inventó
-    ni adivinó objetos, IDs o salidas)?
-  - sin_redundancia_evitable: ¿evitó repetir la misma acción o deshacer trabajo
-    sin una razón visible?\
+# Checklist BINARIO, UN CRITERIO POR LLAMADA. La clase (Evals II, 4.4) es
+# explícita: "un criterio por llamada al judge; seis veredictos en una sola
+# llamada los degradan a todos". Cada criterio se juzga por separado, con
+# few-shot de casos límite y RAZONANDO ANTES de decidir (CoT auditable). Sigue
+# siendo binario (no escala 1-5: se amontona en el medio y no se reproduce).
+
+
+class CriterionVerdict(BaseModel):
+    """Veredicto de UN criterio: primero el razonamiento (CoT), después el bool."""
+
+    razonamiento: str  # se completa PRIMERO: mejora consistencia y es auditable
+    cumple: bool       # el veredicto binario, recién después de razonar
+
+
+# Criterios binarios, en orden fijo. El "score" derivado es cuántos dan True.
+CRITERIOS = ["exploracion_ordenada", "acciones_apoyadas", "sin_redundancia_evitable"]
+
+# Por criterio: la pregunta sí/no + few-shot etiquetado. Los ejemplos son
+# ILUSTRATIVOS (no salen del dataset evaluado, para no filtrar) y definen
+# CONDUCTA, no palabras. La clase: "few-shot con casos límite, incluidos los que
+# el judge falló" — el judge también tiene su loop.
+CRITERIOS_SPEC: dict[str, dict[str, Any]] = {
+    "exploracion_ordenada": {
+        "pregunta": (
+            "¿El agente observó (look/examine) antes de actuar, sin saltar a "
+            "ciegas a take/use/go, y con exploración SUSTANTIVA (no un único look "
+            "y abandonar)?"
+        ),
+        "ejemplos": [
+            ("look -> examine(escritorio) -> take(llave_oro)", True,
+             "observó y examinó antes de tomar: exploración ordenada."),
+            ("take(llave_oro)   [primera acción, sin look/examine previo]", False,
+             "actuó a ciegas: tomó sin observar primero."),
+            ("look   [y después solo texto, abandona]", False,
+             "un único look y se rinde: no hay exploración sustantiva."),
+        ],
+    },
+    "acciones_apoyadas": {
+        "pregunta": (
+            "¿Cada acción (take/use/go) se apoya en algo REALMENTE observado antes "
+            "en la traza (no inventó objetos, IDs ni salidas)?"
+        ),
+        "ejemplos": [
+            ("look revela [id: cofre] -> use(llave, cofre)", True,
+             "usó un id que apareció en un resultado previo."),
+            ("use(llave, puerta) -> ERROR: no tenés 'llave' en el inventario", False,
+             "usó algo que no poseía: la tool devolvió error, acción no apoyada."),
+            ("go(norte) -> ERROR: no existe la salida 'norte'", False,
+             "inventó una salida que ningún look devolvió."),
+        ],
+    },
+    "sin_redundancia_evitable": {
+        "pregunta": (
+            "¿Evitó repetir la misma acción con los mismos argumentos, o deshacer "
+            "trabajo, sin una razón visible?"
+        ),
+        "ejemplos": [
+            ("look -> examine(caja) -> take(item)", True,
+             "sin repeticiones: cada acción avanza."),
+            ("examine(caja) -> examine(caja) -> examine(caja)", False,
+             "repite la misma acción sin que cambie nada: redundancia evitable."),
+        ],
+    },
+}
+
+JUDGE_SYSTEM_PROMPT = (
+    "Sos un evaluador experto de agentes que resuelven salas de escape. Evaluás la "
+    "CALIDAD DEL PROCESO de exploración, no si se logró el objetivo (eso se "
+    "verifica por código aparte). Juzgás UN SOLO criterio por vez. Primero razonás "
+    "sobre la traza y recién después emitís el booleano. Sos estricto y te basás "
+    "solo en la traza provista. Respondé únicamente con la herramienta final_result."
+)
+
+_CRITERION_PROMPT = """\
+Juzgá UN solo criterio de calidad de la exploración de un agente en una sala de escape.
+
+CRITERIO ({nombre}): {pregunta}
+
+Ejemplos etiquetados (definen conducta, no palabras):
+{ejemplos}
+
+TRAYECTORIA A EVALUAR:
+{trace}
+
+Primero completá `razonamiento` (2 oraciones, basadas en la traza) y recién
+después `cumple` (true/false) para ESTE criterio únicamente.
 """
 
 
+def _ejemplos_texto(crit: str) -> str:
+    """Formatea el few-shot de un criterio para el prompt."""
+    lines = []
+    for traza, cumple, motivo in CRITERIOS_SPEC[crit]["ejemplos"]:
+        lines.append(f"  - Traza: {traza}\n    cumple={str(cumple).lower()} — {motivo}")
+    return "\n".join(lines)
+
+
+# --- Modo single-call (default) --------------------------------------------
+# La clase recomienda "un criterio por llamada", pero eso TRIPLICA las llamadas
+# y, con un judge local débil (`llama3.2`), colapsa la cobertura (ver §3.4 del
+# informe: pedirle razonar-antes-de-decidir lo hace responder en PROSA en vez de
+# llamar la tool —el mismo fallo que el judge debería detectar—). Por eso el
+# modo por defecto puntúa los 3 criterios en UNA llamada (cobertura ~96%), y el
+# modo per-criterio queda como opción (`--per-criterion`) para reproducir el
+# hallazgo. Ambos son binarios (no escala 1-5).
+
+
 class TrajectoryVerdict(BaseModel):
-    """Veredicto cualitativo: checklist binario + justificación."""
+    """Veredicto single-call: los 3 criterios binarios + justificación."""
 
     exploracion_ordenada: bool
     acciones_apoyadas: bool
@@ -66,28 +157,26 @@ class TrajectoryVerdict(BaseModel):
     justificacion: str
 
 
-# Criterios binarios, en orden fijo. El "score" derivado es cuántos dan True.
-CRITERIOS = ["exploracion_ordenada", "acciones_apoyadas", "sin_redundancia_evitable"]
-
-
-JUDGE_SYSTEM_PROMPT = (
-    "Sos un evaluador experto de agentes que resuelven salas de escape. "
-    "Evaluás la CALIDAD DEL PROCESO de exploración con un checklist SÍ/NO, no si "
-    "se logró el objetivo (eso se verifica por código aparte). Sos estricto y te "
-    "basás solo en la traza provista. Respondé únicamente con la herramienta "
-    "final_result."
+_RUBRICA_SINGLE = "\n".join(
+    f"  - {crit}: {CRITERIOS_SPEC[crit]['pregunta']}" for crit in CRITERIOS
 )
 
-JUDGE_PROMPT_TEMPLATE = """\
-Evaluá la siguiente trayectoria de un agente en una sala de escape.
+JUDGE_SYSTEM_PROMPT_SINGLE = (
+    "Sos un evaluador experto de agentes que resuelven salas de escape. Evaluás "
+    "la CALIDAD DEL PROCESO de exploración con un checklist SÍ/NO, no si se logró "
+    "el objetivo (eso se verifica por código aparte). Sos estricto y te basás solo "
+    "en la traza. Respondé únicamente con la herramienta final_result."
+)
 
+_SINGLE_PROMPT = """\
+Evaluá la trayectoria de un agente en una sala de escape con este checklist SÍ/NO
+(no si resolvió, eso se verifica por código aparte):
 {rubrica}
 
 TRAYECTORIA:
 {trace}
 
-Devolvé cada criterio como booleano (true/false) y una `justificacion` breve
-basada en la traza.
+Devolvé cada criterio como booleano (true/false) y una `justificacion` breve.
 """
 
 
@@ -196,27 +285,71 @@ def cohen_kappa(labels_a: list[Any], labels_b: list[Any]) -> float | None:
 # ---------------------------------------------------------------------------
 
 
-def judge_case(case: dict[str, Any], judge_agent: Any) -> dict[str, Any] | None:
-    """Puntúa una trayectoria con el judge. `None` si el judge falla."""
-    prompt = JUDGE_PROMPT_TEMPLATE.format(
-        rubrica=RUBRICA_EXPLORACION, trace=format_trace(case)
-    )
+def _judge_case_single(case: dict[str, Any], judge_agent: Any) -> dict[str, Any] | None:
+    """Single-call: los 3 criterios en UNA llamada (default, ~96% de cobertura)."""
+    prompt = _SINGLE_PROMPT.format(rubrica=_RUBRICA_SINGLE, trace=format_trace(case))
     try:
-        verdict = judge_agent.structured_call(
-            prompt=prompt, schema=TrajectoryVerdict, system=JUDGE_SYSTEM_PROMPT
+        v = judge_agent.structured_call(
+            prompt=prompt, schema=TrajectoryVerdict, system=JUDGE_SYSTEM_PROMPT_SINGLE
         )
     except Exception:  # noqa: BLE001 — un caso que el judge no puede puntuar
         return None
-    return verdict.model_dump()
+    return v.model_dump()
+
+
+def _judge_case_per_criterion(case: dict[str, Any], judge_agent: Any) -> dict[str, Any] | None:
+    """Una llamada por criterio (regla 4.4 de la clase). Con un judge local débil
+    la cobertura COLAPSA (el prompt de razonar-antes-de-decidir lo hace responder
+    en prosa; ver §3.4). Reintenta cada criterio 2 veces; devuelve `None` solo si
+    ninguno se pudo puntuar.
+    """
+    trace = format_trace(case)
+    verdict: dict[str, Any] = {}
+    razones: list[str] = []
+    obtenidos = 0
+    for crit in CRITERIOS:
+        spec = CRITERIOS_SPEC[crit]
+        prompt = _CRITERION_PROMPT.format(
+            nombre=crit, pregunta=spec["pregunta"],
+            ejemplos=_ejemplos_texto(crit), trace=trace,
+        )
+        verdict[crit] = None
+        for _ in range(2):
+            try:
+                r = judge_agent.structured_call(
+                    prompt=prompt, schema=CriterionVerdict, system=JUDGE_SYSTEM_PROMPT
+                )
+                verdict[crit] = bool(r.cumple)
+                razones.append(f"{crit}: {r.razonamiento}")
+                obtenidos += 1
+                break
+            except Exception:  # noqa: BLE001 — reintentamos; si persiste queda None
+                continue
+    if obtenidos == 0:
+        return None
+    verdict["justificacion"] = " | ".join(razones)
+    return verdict
+
+
+def judge_case(
+    case: dict[str, Any], judge_agent: Any, per_criterion: bool = False
+) -> dict[str, Any] | None:
+    """Puntúa una trayectoria. `per_criterion=True` activa el modo 4.4 (una
+    llamada por criterio); por defecto usa single-call (más robusto)."""
+    if per_criterion:
+        return _judge_case_per_criterion(case, judge_agent)
+    return _judge_case_single(case, judge_agent)
 
 
 def judge_cases(
-    cases: list[dict[str, Any]], module: Any, judge_model: str | None = None
+    cases: list[dict[str, Any]], module: Any, judge_model: str | None = None,
+    per_criterion: bool = False,
 ) -> list[dict[str, Any]]:
     """Puntúa todos los casos con un judge 'limpio'.
 
     `judge_model` fuerza un modelo **distinto del agente** (evita self-preference;
-    idealmente más capaz). Sin él, usa el proveedor del entorno.
+    idealmente más capaz). Sin él, usa el proveedor del entorno. `per_criterion`
+    activa el modo 4.4 (opción; ver §3.4 del informe).
     """
     config: dict[str, Any] = {"register_default_tools": False}
     if judge_model:
@@ -232,7 +365,7 @@ def judge_cases(
                 "config": c.get("config"),
                 "repeat": c.get("repeat"),
                 "goal_achieved": c.get("goal_achieved"),
-                "verdict": judge_case(c, judge_agent),
+                "verdict": judge_case(c, judge_agent, per_criterion=per_criterion),
             }
         )
     return judged
@@ -248,13 +381,19 @@ def main(argv: list[str] | None = None) -> int:
         "--judge-model", default=None,
         help="Modelo del judge (Ollama). DEBE ser distinto del agente evaluado.",
     )
+    parser.add_argument(
+        "--per-criterion", action="store_true",
+        help="Modo 4.4 de la clase: una llamada por criterio. OJO: con judge "
+             "local débil colapsa la cobertura (ver §3.4). Default: single-call.",
+    )
     args = parser.parse_args(argv)
 
     cases_path = Path(args.cases)
     cases = [json.loads(line) for line in cases_path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
     module = importlib.import_module(args.module)
-    judged = judge_cases(cases, module, judge_model=args.judge_model)
+    judged = judge_cases(cases, module, judge_model=args.judge_model,
+                         per_criterion=args.per_criterion)
 
     out_path = cases_path.parent / "judged.jsonl"
     with out_path.open("w", encoding="utf-8") as fh:

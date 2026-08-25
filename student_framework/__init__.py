@@ -16,6 +16,7 @@ from mia_agents.protocols import Agent
 from .agent import (
     ESCAPE_ROOM_SYSTEM_PROMPT,
     ESCAPE_ROOM_SYSTEM_PROMPT_VERSION,
+    SYSTEM_PROMPT,
     MyAgent,
 )
 

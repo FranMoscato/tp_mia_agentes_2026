@@ -130,9 +130,10 @@ def test_cohen_kappa_largos_distintos_o_vacio() -> None:
 # --- judge_case con judge falso --------------------------------------------
 
 
-def test_judge_case_usa_structured_call() -> None:
-    veredicto = {"exploracion_ordenada": True, "acciones_apoyadas": True,
-                 "sin_redundancia_evitable": False, "justificacion": "ok"}
+def test_judge_case_single_una_sola_llamada() -> None:
+    # Default: los 3 criterios en UNA llamada (single-call).
+    veredicto = {"exploracion_ordenada": True, "acciones_apoyadas": False,
+                 "sin_redundancia_evitable": True, "justificacion": "ok"}
 
     class _FakeVerdict:
         def model_dump(self):
@@ -140,18 +141,41 @@ def test_judge_case_usa_structured_call() -> None:
 
     class _FakeAgent:
         def __init__(self):
-            self.llamado = False
+            self.llamadas = 0
 
         def structured_call(self, prompt, schema, system=None):
-            self.llamado = True
-            assert "TRAYECTORIA" in prompt  # el prompt lleva la traza
+            self.llamadas += 1
+            assert "TRAYECTORIA" in prompt
             return _FakeVerdict()
 
     agent = _FakeAgent()
     case = {"scenario": "x", "difficulty": "easy", "steps": []}
-    verdict = judge.judge_case(case, agent)
-    assert agent.llamado
+    verdict = judge.judge_case(case, agent)  # per_criterion=False por defecto
+    assert agent.llamadas == 1
     assert verdict == veredicto
+
+
+def test_judge_case_per_criterion_una_llamada_por_criterio() -> None:
+    # Modo 4.4: un criterio por llamada -> 3 structured_call.
+    class _FakeVerdict:
+        cumple = True
+        razonamiento = "ok"
+
+    class _FakeAgent:
+        def __init__(self):
+            self.llamadas = 0
+
+        def structured_call(self, prompt, schema, system=None):
+            self.llamadas += 1
+            assert "UN solo criterio" in prompt
+            return _FakeVerdict()
+
+    agent = _FakeAgent()
+    case = {"scenario": "x", "difficulty": "easy", "steps": []}
+    verdict = judge.judge_case(case, agent, per_criterion=True)
+    assert agent.llamadas == 3
+    assert all(verdict[c] is True for c in judge.CRITERIOS)
+    assert "justificacion" in verdict
 
 
 def test_judge_case_devuelve_none_si_el_judge_falla() -> None:

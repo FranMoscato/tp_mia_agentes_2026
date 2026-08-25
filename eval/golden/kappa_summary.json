@@ -1,20 +1,20 @@
 {
-  "n": 8,
+  "n": 6,
   "by_criterion": {
     "exploracion_ordenada": {
-      "kappa": 0.0,
+      "kappa": 0.333,
       "ref_yes_rate": 0.5,
-      "judge_yes_rate": 0.0
+      "judge_yes_rate": 0.17
     },
     "acciones_apoyadas": {
       "kappa": 0.0,
       "ref_yes_rate": 1.0,
-      "judge_yes_rate": 0.25
+      "judge_yes_rate": 0.33
     },
     "sin_redundancia_evitable": {
-      "kappa": -0.2,
-      "ref_yes_rate": 0.88,
-      "judge_yes_rate": 0.75
+      "kappa": -0.364,
+      "ref_yes_rate": 0.83,
+      "judge_yes_rate": 0.33
     }
   }
 }

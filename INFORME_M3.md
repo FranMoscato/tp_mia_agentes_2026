@@ -24,10 +24,18 @@ on/off**— y categorizamos los modos de fallo sobre trazas reales.
 
 ### 1.1 Reutilización del framework M1+M2
 
-El agente de M3 es **el mismo `MyAgent`** de M1+M2, sin bifurcar. El problema se
-resuelve registrando las herramientas del mundo y dejando que el bucle ReAct de
-M1 (sense → decide → act) opere, apoyado en el estado conversacional y la
-ventana de memoria de M2:
+El agente de M3 es **el mismo `MyAgent`** de M1+M2, sin bifurcar. En el lenguaje
+de la clase de patrones de composición, **M1+M2 son el "patrón 0" (un *augmented
+LLM* —system prompt + tools + memoria— dentro de un loop ReAct con condiciones de
+corte)**, y M3 no lo reemplaza: lo aplica. Es además un **agente autónomo**, no un
+*workflow*, según la distinción de *Building Effective Agents* (Anthropic, 2024):
+la decisión del control-flow la toma **la LLM en runtime** (elige qué tool llamar
+y cuándo parar), no nuestro código. Esa es la elección correcta para la sala de
+escape —un espacio **abierto y de pasos impredecibles**, donde la clase ubica a
+la agencia sobre el workflow—; el precio, que asumimos, es **más varianza y
+debugging más difícil** que un pipeline determinístico. Lo resolvemos registrando
+las herramientas del mundo y dejando operar el bucle ReAct de M1 (sense → decide
+→ act), apoyado en el estado y la memoria de M2:
 
 - **Bucle y herramientas (M1).** El runner registra los verbos del mundo con
   `agent.register_tool(...)` ([`mia_world/cli.py`](mia_world/cli.py),
@@ -59,14 +67,21 @@ Lo mínimo, y todo **detrás de config/flags** para no contaminar M1/M2:
   acciones, salidas) con una llamada LLM extra y lo inyecta como contexto. Es
   **memoria comprimida**, activable con `use_summarizer`; su costo se contabiliza
   **aparte** para que el experimento compare de forma justa.
-- **Gate determinístico (opcional).** Un `if` que garantiza lo que ningún prompt
-  puede: no usar un objeto que no está en el inventario, no inventar IDs
+- **Gate determinístico (opcional).** Es el **patrón de gate** de la clase (el
+  chequeo determinístico entre pasos del *prompt chaining*): *"ningún prompt
+  garantiza 'monto ≤ límite'; un gate sí"*. Cumple las tres funciones que la
+  clase le asigna —**reglas exactas** (no usar un objeto fuera del inventario, no
+  inventar IDs son un `if`, no una probabilidad), **cortar temprano** y **registro
+  auditable** (el error accionable)— a **0 tokens y 100 % determinístico**
   ([`_ejecutar_tool`](student_framework/agent.py); gate específico en
   [`eval/run.py`](eval/run.py)). Detrás de flag: el contrato de M1 (`run` puede
   terminar con texto sin tools) se mantiene.
 
 Ninguna de estas piezas es el comportamiento por defecto: el agente "base" de
-M3 es ReAct puro con el prompt de escape.
+M3 es ReAct puro con el prompt de escape. Seguimos la **regla de simplicidad
+composable** de la clase (Anthropic): empezar por lo más simple y subir en
+complejidad solo con evidencia; por eso el resumen y el gate son *opcionales* y
+se evalúan como experimentos, no se asumen.
 
 ---
 

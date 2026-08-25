@@ -81,7 +81,7 @@ corta por `max_iterations`.
 ### 3.1 Cómo está implementada
 
 La estrategia obligatoria es **sliding window por recencia**, en
-`_windowed_messages()` ([agent.py:263-307](student_framework/agent.py#L263)). En
+`_windowed_messages()` ([agent.py:619](student_framework/agent.py#L619)). En
 cada llamada al LLM se construye una **copia recortada** del historial:
 
 - Si `len(self.messages) <= max_history_messages`, se envía tal cual.
@@ -105,7 +105,7 @@ Cualquiera sea el recorte, **el mensaje de usuario más reciente siempre viaja a
 LLM**. Si el turno actual (por ejemplo, con muchos `tool` intermedios) es más
 largo que el presupuesto y la cola no contiene ningún mensaje `user`, se **fuerza**
 la inclusión del último mensaje de usuario al frente de la ventana
-([agent.py:294-300](student_framework/agent.py#L294)). Cubierto por
+([agent.py:619](student_framework/agent.py#L619)). Cubierto por
 `test_ultimo_mensaje_de_usuario_siempre_presente`.
 
 El **turno inicial completo (el goal)** también se conserva cuando el historial
@@ -176,6 +176,43 @@ Cuatro problemas concretos que surgieron al implementar la ventana:
    con tool calls pendientes, se guardaba el turno `assistant` con esos
    `tool_calls` sin su respuesta `tool`. Ahora persistimos el último turno **sin**
    `tool_calls` para no dejar huérfanos en el historial.
+
+### 3.5 Extensión en M3: tareas de un solo turno
+
+> Esta sección documenta un cambio **posterior** a la entrega de M2. El resto
+> del informe describe M2 tal como se entregó; los conteos de tests de la §1 y
+> la §8 corresponden a ese momento.
+
+La estrategia descrita arriba desliza sobre **turnos**, y un turno se delimita
+por los mensajes `user`. Eso es correcto mientras el agente sea conversacional,
+que es el supuesto de M2: cada `run()` agrega un `user`.
+
+En M3 ese supuesto no vale. El agente resuelve el escenario entero dentro de
+**un solo `run()`**, así que hay un único mensaje `user` (el goal) y después
+solo bloques `assistant(tool_calls)` + sus `tool`. Sin un segundo `user`, el
+"turno inicial completo" se comía el historial entero, el presupuesto restante
+quedaba negativo y el fallback descartaba todo lo que no fuera `user`: la
+ventana **colapsaba al goal pelado** y el agente perdía toda la exploración a
+mitad de partida. Con los defaults del eval (50 mensajes, 30 iteraciones) el
+colapso ocurría en la llamada 26 y ya no se recuperaba — justo en los
+escenarios `hard`/`extreme`, que son los que necesitan 13-21 tool-calls.
+
+La corrección agrega una rama para ese caso
+([`_ventana_de_un_solo_turno`](student_framework/agent.py#L743)): cuando hay un
+único `user`, la ventana desliza sobre **bloques de acción** en lugar de turnos.
+Un bloque es un `assistant` junto con los `tool` que responden a sus
+`tool_calls` ([`_bloques_de_accion`](student_framework/agent.py#L727)); es la
+unidad que no se puede partir sin dejar un `tool_call` sin respuesta. Se
+conserva el goal como ancla y se agregan los bloques más recientes que entren
+en el presupuesto.
+
+Los invariantes de §3.2 se mantienen: la ventana empieza en `user`, no supera
+el presupuesto, no deja huérfanos y, una vez normalizada a Bedrock Converse,
+alterna roles correctamente (los `tool` se normalizan a `user`, así que la
+secuencia queda `user`, y después pares `assistant`/`user`).
+
+El camino multiturno de M1/M2 no cambió. La regresión está cubierta por
+`tests/test_m3_ventana.py`.
 
 ---
 

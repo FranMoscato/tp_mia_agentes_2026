@@ -1,0 +1,392 @@
+{
+  "meta": {
+    "timestamp": "20260825-193013",
+    "module": "student_framework",
+    "max_iterations": 30,
+    "max_history_messages": null,
+    "repeats": 3,
+    "provider": "bedrock",
+    "model": "amazon.nova-lite-v1:0",
+    "bedrock_model_id": "amazon.nova-lite-v1:0",
+    "aws_profile": "948169713308_udesasbx_IsbUsersPS",
+    "aws_region": "us-east-1",
+    "prompt_version": "escape-v1",
+    "git_commit": "ea4800c"
+  },
+  "summary": {
+    "n_cases": 96,
+    "by_config": {
+      "gate": {
+        "n": 24,
+        "solved": 15,
+        "accuracy": 0.625,
+        "accuracy_ci95": [
+          0.427,
+          0.788
+        ],
+        "pass_hat_k": 0.5,
+        "pass_at_k": 0.75,
+        "k": 3,
+        "pass_k_scenarios": "4/8",
+        "pass_at_k_scenarios": "6/8",
+        "avg_calls_overhead_vs_optimal": 2.7,
+        "avg_tool_calls": 14.67,
+        "latency_p50_s": 13.219,
+        "latency_p95_s": 31.648,
+        "latency_agente_p50_s": 13.219,
+        "latency_summarizer_p50_s": 0.0,
+        "tokens_per_solved": 135129,
+        "avg_agent_tokens": 84455.71,
+        "avg_memory_tokens": 0.0,
+        "cost_usd_total": 0.125381,
+        "cost_usd_per_case": 0.005224,
+        "cost_usd_per_solved": 0.008359,
+        "solve_rate_by_scenario": {
+          "study-with-key": 1.0,
+          "color-locks": 0.667,
+          "library-search": 0.333,
+          "extreme-archive": 1.0,
+          "apartment-keys": 1.0,
+          "office-sequence": 1.0,
+          "vault-combination": 0.0,
+          "backtracking-vault": 0.0
+        },
+        "solve_rate_std": 0.423,
+        "redundancy_distribution": {
+          "1": 13,
+          "2": 3,
+          "3": 2,
+          "0": 6
+        },
+        "tool_usage": {
+          "look": 52,
+          "examine": 145,
+          "take": 36,
+          "use": 59,
+          "go": 60
+        },
+        "invalid_action_rate": 0.04,
+        "avg_progress": {
+          "items_taken": 1.33,
+          "rooms_visited": 1.62,
+          "items_opened": 1.17
+        },
+        "failure_breakdown": {
+          "success": 15,
+          "exhausted_iterations": 3,
+          "crash": 6
+        },
+        "prosa_variant_breakdown": {},
+        "by_difficulty": {
+          "easy": {
+            "n": 3,
+            "solved": 3,
+            "accuracy": 1.0
+          },
+          "extreme": {
+            "n": 9,
+            "solved": 3,
+            "accuracy": 0.333
+          },
+          "hard": {
+            "n": 6,
+            "solved": 4,
+            "accuracy": 0.667
+          },
+          "medium": {
+            "n": 6,
+            "solved": 5,
+            "accuracy": 0.833
+          }
+        }
+      },
+      "react": {
+        "n": 24,
+        "solved": 16,
+        "accuracy": 0.667,
+        "accuracy_ci95": [
+          0.467,
+          0.82
+        ],
+        "pass_hat_k": 0.5,
+        "pass_at_k": 0.75,
+        "k": 3,
+        "pass_k_scenarios": "4/8",
+        "pass_at_k_scenarios": "6/8",
+        "avg_calls_overhead_vs_optimal": 2.64,
+        "avg_tool_calls": 18.96,
+        "latency_p50_s": 16.873,
+        "latency_p95_s": 32.549,
+        "latency_agente_p50_s": 16.873,
+        "latency_summarizer_p50_s": 0.0,
+        "tokens_per_solved": 142169,
+        "avg_agent_tokens": 94779.17,
+        "avg_memory_tokens": 0.0,
+        "cost_usd_total": 0.14085,
+        "cost_usd_per_case": 0.005869,
+        "cost_usd_per_solved": 0.008803,
+        "solve_rate_by_scenario": {
+          "study-with-key": 1.0,
+          "color-locks": 0.667,
+          "library-search": 0.667,
+          "extreme-archive": 1.0,
+          "apartment-keys": 1.0,
+          "office-sequence": 1.0,
+          "vault-combination": 0.0,
+          "backtracking-vault": 0.0
+        },
+        "solve_rate_std": 0.408,
+        "redundancy_distribution": {
+          "1": 15,
+          "18": 1,
+          "2": 1,
+          "3": 3,
+          "0": 4
+        },
+        "tool_usage": {
+          "look": 85,
+          "examine": 202,
+          "take": 39,
+          "use": 56,
+          "go": 73
+        },
+        "invalid_action_rate": 0.0,
+        "avg_progress": {
+          "items_taken": 1.67,
+          "rooms_visited": 2.04,
+          "items_opened": 1.33
+        },
+        "failure_breakdown": {
+          "success": 16,
+          "loop_detected": 2,
+          "exhausted_iterations": 2,
+          "crash": 4
+        },
+        "prosa_variant_breakdown": {},
+        "by_difficulty": {
+          "easy": {
+            "n": 3,
+            "solved": 3,
+            "accuracy": 1.0
+          },
+          "extreme": {
+            "n": 9,
+            "solved": 3,
+            "accuracy": 0.333
+          },
+          "hard": {
+            "n": 6,
+            "solved": 5,
+            "accuracy": 0.833
+          },
+          "medium": {
+            "n": 6,
+            "solved": 5,
+            "accuracy": 0.833
+          }
+        }
+      },
+      "react_generico": {
+        "n": 24,
+        "solved": 14,
+        "accuracy": 0.583,
+        "accuracy_ci95": [
+          0.388,
+          0.755
+        ],
+        "pass_hat_k": 0.375,
+        "pass_at_k": 0.75,
+        "k": 3,
+        "pass_k_scenarios": "3/8",
+        "pass_at_k_scenarios": "6/8",
+        "avg_calls_overhead_vs_optimal": 2.27,
+        "avg_tool_calls": 13.0,
+        "latency_p50_s": 10.612,
+        "latency_p95_s": 29.747,
+        "latency_agente_p50_s": 10.612,
+        "latency_summarizer_p50_s": 0.0,
+        "tokens_per_solved": 73179,
+        "avg_agent_tokens": 42687.58,
+        "avg_memory_tokens": 0.0,
+        "cost_usd_total": 0.065157,
+        "cost_usd_per_case": 0.002715,
+        "cost_usd_per_solved": 0.004654,
+        "solve_rate_by_scenario": {
+          "study-with-key": 1.0,
+          "color-locks": 0.667,
+          "library-search": 1.0,
+          "extreme-archive": 0.333,
+          "apartment-keys": 1.0,
+          "office-sequence": 0.667,
+          "vault-combination": 0.0,
+          "backtracking-vault": 0.0
+        },
+        "solve_rate_std": 0.4,
+        "redundancy_distribution": {
+          "1": 15,
+          "2": 3,
+          "0": 6
+        },
+        "tool_usage": {
+          "look": 51,
+          "examine": 137,
+          "use": 43,
+          "take": 34,
+          "go": 47
+        },
+        "invalid_action_rate": 0.0,
+        "avg_progress": {
+          "items_taken": 1.21,
+          "rooms_visited": 1.62,
+          "items_opened": 1.08
+        },
+        "failure_breakdown": {
+          "success": 14,
+          "prosa_en_vez_de_tool": 2,
+          "exhausted_iterations": 2,
+          "crash": 6
+        },
+        "prosa_variant_breakdown": {
+          "otro": 2
+        },
+        "by_difficulty": {
+          "easy": {
+            "n": 3,
+            "solved": 3,
+            "accuracy": 1.0
+          },
+          "extreme": {
+            "n": 9,
+            "solved": 1,
+            "accuracy": 0.111
+          },
+          "hard": {
+            "n": 6,
+            "solved": 5,
+            "accuracy": 0.833
+          },
+          "medium": {
+            "n": 6,
+            "solved": 5,
+            "accuracy": 0.833
+          }
+        }
+      },
+      "summarizer": {
+        "n": 24,
+        "solved": 13,
+        "accuracy": 0.542,
+        "accuracy_ci95": [
+          0.351,
+          0.721
+        ],
+        "pass_hat_k": 0.375,
+        "pass_at_k": 0.75,
+        "k": 3,
+        "pass_k_scenarios": "3/8",
+        "pass_at_k_scenarios": "6/8",
+        "avg_calls_overhead_vs_optimal": 2.22,
+        "avg_tool_calls": 11.46,
+        "latency_p50_s": 54.614,
+        "latency_p95_s": 271.203,
+        "latency_agente_p50_s": 13.902,
+        "latency_summarizer_p50_s": 34.785,
+        "tokens_per_solved": 195278,
+        "avg_agent_tokens": 69828.83,
+        "avg_memory_tokens": 35946.88,
+        "cost_usd_total": 0.192398,
+        "cost_usd_per_case": 0.008017,
+        "cost_usd_per_solved": 0.0148,
+        "solve_rate_by_scenario": {
+          "study-with-key": 1.0,
+          "color-locks": 1.0,
+          "library-search": 0.333,
+          "extreme-archive": 0.333,
+          "apartment-keys": 1.0,
+          "office-sequence": 0.667,
+          "vault-combination": 0.0,
+          "backtracking-vault": 0.0
+        },
+        "solve_rate_std": 0.406,
+        "redundancy_distribution": {
+          "1": 12,
+          "2": 3,
+          "0": 8,
+          "9": 1
+        },
+        "tool_usage": {
+          "look": 55,
+          "examine": 101,
+          "take": 31,
+          "use": 45,
+          "go": 43
+        },
+        "invalid_action_rate": 0.0,
+        "avg_progress": {
+          "items_taken": 1.21,
+          "rooms_visited": 1.62,
+          "items_opened": 1.12
+        },
+        "failure_breakdown": {
+          "success": 13,
+          "exhausted_iterations": 1,
+          "prosa_en_vez_de_tool": 1,
+          "crash": 8,
+          "loop_detected": 1
+        },
+        "prosa_variant_breakdown": {
+          "otro": 1
+        },
+        "by_difficulty": {
+          "easy": {
+            "n": 3,
+            "solved": 3,
+            "accuracy": 1.0
+          },
+          "extreme": {
+            "n": 9,
+            "solved": 1,
+            "accuracy": 0.111
+          },
+          "hard": {
+            "n": 6,
+            "solved": 3,
+            "accuracy": 0.5
+          },
+          "medium": {
+            "n": 6,
+            "solved": 6,
+            "accuracy": 1.0
+          }
+        }
+      }
+    },
+    "failure_priority": {
+      "success": {
+        "freq": 58,
+        "total_latency_s": 1723.9,
+        "avg_latency_s": 29.7
+      },
+      "exhausted_iterations": {
+        "freq": 8,
+        "total_latency_s": 549.5,
+        "avg_latency_s": 68.7
+      },
+      "crash": {
+        "freq": 24,
+        "total_latency_s": 391.7,
+        "avg_latency_s": 16.3
+      },
+      "prosa_en_vez_de_tool": {
+        "freq": 3,
+        "total_latency_s": 177.6,
+        "avg_latency_s": 59.2
+      },
+      "loop_detected": {
+        "freq": 3,
+        "total_latency_s": 144.9,
+        "avg_latency_s": 48.3
+      }
+    }
+  }
+}

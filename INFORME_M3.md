@@ -640,6 +640,43 @@ despegar la accuracy—.
 > puede confiar en los puntajes del judge. Los pasos 1–4 de abajo se miden mejor
 > una vez hecho esto.
 
+**Checklist para el equipo — qué correr con Bedrock (todo ya cableado).** Con el
+lease de AWS y el `.env` apuntando a Bedrock (`BEDROCK_MODEL_ID`, `AWS_PROFILE`,
+`AWS_REGION`):
+
+1. **Eval completo (agente `nova-lite`).** Enciende accuracy + todas las métricas
+   degeneradas. Corre los 4 brazos —incluida la **ablación de prompt**
+   (`react_generico`)— sin hacer nada extra:
+   ```bash
+   python eval/run.py --repeats 3
+   ```
+   *(Para ahorrar costo sin la ablación: `--configs react,summarizer,gate`.)*
+2. **Judge fuerte y distinto (`nova-pro` juzga a `nova-lite`)** + meta-eval kappa.
+   Es lo que saca la κ de ≈0 y valida (o no) los puntajes del judge:
+   ```bash
+   python eval/judge.py eval/results/<ts>/cases.jsonl \
+     --judge-provider bedrock --judge-model us.amazon.nova-pro-v1:0
+   python eval/kappa.py  eval/results/<ts>/cases.jsonl   # o sobre eval/golden/
+   ```
+3. **Barridos de hiperparámetros** (ahora expuestos): tope de iteraciones y
+   **ventana de memoria** —el experimento de contexto que hoy no se puede medir
+   porque el modelo chico no llena la ventana—:
+   ```bash
+   python eval/run.py --configs react --max-iterations 20   # vs 30
+   python eval/run.py --configs react --max-history-messages 20   # vs 50
+   ```
+4. **Comparativas cross-modelo.** Se arman solas: la corrida de Bedrock se suma a
+   los gráficos junto a qwen/llama3.2 (agrupa por `provider/model`):
+   ```bash
+   python scripts/comparar_modelos_m3.py
+   ```
+5. **Reproducir el hallazgo del judge** (opcional): el modo per-criterio (4.4) con
+   un judge fuerte, para ver si con `nova-pro` **sí** funciona (a diferencia del
+   local): `python eval/judge.py … --judge-provider bedrock --judge-model
+   us.amazon.nova-pro-v1:0 --per-criterion`.
+
+Y sobre esos resultados, lo que **construiríamos** después:
+
 1. **Gate más rico** (si el Experimento 2 lo respalda): extender las garantías
    determinísticas a más precondiciones del mundo, y medir hasta dónde el gate
    sustituye prompt.

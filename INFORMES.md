@@ -22,13 +22,6 @@ Con un modelo que sí llama herramientas, la accuracy deja de ser 0 y se enciend
 las métricas hoy degeneradas (pass^k, overhead-vs-óptimo, tokens/USD por éxito) y
 la kappa del judge deja de ser degenerada. Detalle en [INFORME_M3](INFORME_M3.md) §5.
 
-## Diseño compartido
-
-Los tres informes se leen como una serie: los diagramas comparten una **paleta
-única** (la paleta categórica validada del skill de dataviz, ver
-[`scripts/estilo_diagramas.py`](scripts/estilo_diagramas.py)) y el mismo estilo
-de cajas y flechas. Los gráficos de datos (solo en M3) usan esa misma paleta.
-
 ## Cómo se regeneran los diagramas
 
 ```bash

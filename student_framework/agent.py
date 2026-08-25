@@ -425,7 +425,11 @@ class MyAgent:
         system_prompt : str
             System prompt por defecto.
         max_iterations : int
-            Tope de iteraciones del bucle del agente (M1).
+            Tope de iteraciones del bucle del agente (M1). Default 20 (baseline
+            anti-bucle-infinito de M1). **Es un hiperparámetro del eval**: el
+            runner de M3 lo sube a 30 (`DEFAULT_MAX_ITERATIONS`) y se expone con
+            `--max-iterations` —la clase lista "reducir max steps" como
+            experimento válido—; el 20 del constructor es solo el default de M1.
         max_history_messages : int
             Número máximo de mensajes que se permiten en la lista
             `messages` enviada al LLM en una única llamada. En M1 este
@@ -433,13 +437,22 @@ class MyAgent:
             constructor. En M2 deben respetarlo: la longitud de la
             lista de mensajes pasada a `self._llm.chat(...)` no puede
             superar este número en ninguna llamada, sin importar la
-            estrategia de memoria que elijan.
+            estrategia de memoria que elijan. Default 50. **Hiperparámetro
+            expuesto en el eval** (`--max-history-messages`) para barrer el tamaño
+            de ventana (experimento de memoria/contexto); no lo barremos en M3
+            porque el agente falla aguas arriba (prosa) y **nunca llena la
+            ventana** —queda listo para experimentarlo con un modelo capaz.
         max_retries : int
             Cantidad máxima de reintentos ante fallos transitorios
             (timeouts, 5xx, rate limits) en llamadas al LLM y a las tools.
+            Default 3 (valor estándar). **NO es un hiperparámetro de performance**:
+            es robustez operativa —solo cambia qué pasa ante un error transitorio
+            del proveedor, no el comportamiento ni la accuracy del agente—, así que
+            se deja fijo.
         retry_backoff_base : float
             Espera base (en segundos) del backoff exponencial entre
-            reintentos: base * 2**intento. Poner 0 en tests.
+            reintentos: base * 2**intento. Default 0.5 s (backoff estándar).
+            Robustez operativa, fijo (igual que `max_retries`). Poner 0 en tests.
         use_summarizer : bool
             Si es True, antes de cada llamada al LLM se re-deriva un
             `GameState` estructurado (con una llamada LLM extra) y se inyecta

@@ -545,6 +545,7 @@ def run_one(
     module: Any,
     repeat: int,
     optimal_calls: int | None,
+    max_history_messages: int | None = None,
 ) -> dict[str, Any]:
     """Corre un escenario con una config y devuelve el caso capturado.
 
@@ -560,6 +561,8 @@ def run_one(
         "max_iterations": max_iterations,
         **config,
     }
+    if max_history_messages is not None:
+        build_config["max_history_messages"] = max_history_messages
     # Gate determinístico (experimento #2): si el config lo pide, lo construimos
     # cerrado sobre el world de ESTE escenario y lo pasamos como callable.
     if build_config.pop("use_gate", False):
@@ -709,6 +712,11 @@ def main(argv: list[str] | None = None) -> int:
         help=f"Tope de iteraciones del agente. Default {DEFAULT_MAX_ITERATIONS}.",
     )
     parser.add_argument(
+        "--max-history-messages", type=int, default=None,
+        help="Tamaño de la ventana de memoria (mensajes). Hiperparámetro para "
+             "barrer memoria/contexto; None = default del agente (50).",
+    )
+    parser.add_argument(
         "--module", default="student_framework",
         help="Módulo que expone build_agent. Default: student_framework.",
     )
@@ -759,6 +767,7 @@ def main(argv: list[str] | None = None) -> int:
                     case = run_one(
                         path, name, CONFIGS[name], args.max_iterations,
                         module, r, optima[path],
+                        max_history_messages=args.max_history_messages,
                     )
                     cases.append(case)
                     fh.write(json.dumps(case, ensure_ascii=False) + "\n")
@@ -783,6 +792,7 @@ def main(argv: list[str] | None = None) -> int:
         "timestamp": timestamp,
         "module": args.module,
         "max_iterations": args.max_iterations,
+        "max_history_messages": args.max_history_messages,
         "repeats": args.repeats,
         "provider": provider,
         "model": model,

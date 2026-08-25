@@ -22,13 +22,16 @@ import matplotlib.patches as mpatches
 from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
 import matplotlib.pyplot as plt
 
-# Paleta de colores por tipo de componente.
-COLOR_TUYO = "#dbeafe"      # azul claro: código del grupo (student_framework)
-COLOR_FIJO = "#fee2e2"      # rojo claro: código FIJO de la cátedra (no se toca)
-COLOR_TOOLS = "#dcfce7"     # verde claro: herramientas
-COLOR_BORDE_TUYO = "#2563eb"
-COLOR_BORDE_FIJO = "#dc2626"
-COLOR_BORDE_TOOLS = "#16a34a"
+# Paleta unificada (fuente única en estilo_diagramas.py): mismos hex validados
+# que M2/M3, mapeados a las categorías semánticas de este diagrama.
+from estilo_diagramas import AZUL, VERDE, ROJO, AMBAR, GRIS, FILL  # noqa: E402
+
+COLOR_TUYO = FILL[AZUL]      # azul: código del grupo (student_framework)
+COLOR_FIJO = FILL[ROJO]      # rojo (status): código FIJO de la cátedra (no se toca)
+COLOR_TOOLS = FILL[VERDE]    # verde: herramientas
+COLOR_BORDE_TUYO = AZUL
+COLOR_BORDE_FIJO = ROJO
+COLOR_BORDE_TOOLS = VERDE
 
 
 def caja(ax, x, y, w, h, texto, face, edge, fontsize=10, weight="normal"):
@@ -111,7 +114,7 @@ def main() -> None:
     caja(ax, 3.6, 3.5, 4.8, 3.0, "", COLOR_TUYO, COLOR_BORDE_TUYO)
     ax.text(6.0, 6.15, "MyAgent", ha="center", fontsize=12, weight="bold")
     ax.text(6.0, 5.75, "[student_framework/agent.py]", ha="center", fontsize=8.5,
-            style="italic", color="#475569")
+            style="italic", color=GRIS)
     ax.text(
         6.0, 4.55,
         "_tools   : { nombre -> callable }\n"
@@ -126,7 +129,7 @@ def main() -> None:
     caja(ax, 0.3, 3.7, 2.7, 2.6, "", COLOR_FIJO, COLOR_BORDE_FIJO)
     ax.text(1.65, 5.95, "LLMClient", ha="center", fontsize=11, weight="bold")
     ax.text(1.65, 5.6, "(FIJO — cátedra)", ha="center", fontsize=8, style="italic",
-            color="#991b1b")
+            color=ROJO)
     ax.text(
         1.65, 4.6,
         "BedrockProvider\nOllamaProvider\nMockLLMClient\n\n"
@@ -138,7 +141,7 @@ def main() -> None:
     caja(ax, 9.0, 3.7, 2.7, 2.6, "", COLOR_TOOLS, COLOR_BORDE_TOOLS)
     ax.text(10.35, 5.95, "Herramientas", ha="center", fontsize=11, weight="bold")
     ax.text(10.35, 5.6, "[student_framework/tools/]", ha="center", fontsize=7.5,
-            style="italic", color="#166534")
+            style="italic", color=VERDE)
     ax.text(
         10.35, 4.55,
         "calculadora\nleer_archivo\ncontar_palabras\n\n"
@@ -149,12 +152,12 @@ def main() -> None:
     # --- LLMResponse / proveedor reales (abajo izquierda) ---
     caja(ax, 0.3, 1.2, 2.7, 1.5,
          "Proveedor LLM\nAWS Bedrock / Ollama\n(o Mock en tests)",
-         "#f1f5f9", "#94a3b8", fontsize=9)
+         FILL[GRIS], GRIS, fontsize=9)
 
     # --- AgentResult (abajo centro) ---
     caja(ax, 4.3, 1.4, 3.4, 1.1,
          "AgentResult\n(answer, steps[], tokens)",
-         "#fef9c3", "#ca8a04", fontsize=10, weight="bold")
+         FILL[AMBAR], AMBAR, fontsize=10, weight="bold")
 
     # === Flechas ===
     # build_agent -> MyAgent (construye y registra tools)

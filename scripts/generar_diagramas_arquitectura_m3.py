@@ -27,14 +27,16 @@ from matplotlib.patches import FancyArrowPatch, FancyBboxPatch
 _REPO = Path(__file__).resolve().parent.parent
 _DOCS = _REPO / "docs"
 
-# Código de color = la taxonomía que queremos enseñar.
-AZUL = "#2a78d6"   # AGENTE autónomo: el LLM elige la próxima acción.
-VERDE = "#1baf7a"  # WORKFLOW determinístico: código, 0 tokens, pasos fijos.
-AMBAR = "#eb6834"  # WORKFLOW con LLM: llamada LLM que corre SIEMPRE igual (no autónoma).
-GRIS = "#9aa0a8"   # ENTORNO: el mundo determinístico sobre el que se actúa.
-TINTA = "#1f2328"
-
-_FILL = {AZUL: "#eaf2fc", VERDE: "#e7f7f1", AMBAR: "#fdece4", GRIS: "#f1f2f4"}
+# Código de color = la taxonomía que queremos enseñar (paleta unificada, fuente
+# única en estilo_diagramas.py; NARANJA es el "ámbar" de esta taxonomía).
+from estilo_diagramas import (  # noqa: E402
+    AZUL,      # AGENTE autónomo: el LLM elige la próxima acción.
+    VERDE,     # WORKFLOW determinístico: código, 0 tokens, pasos fijos.
+    NARANJA as AMBAR,  # WORKFLOW con LLM: llamada que corre SIEMPRE igual.
+    GRIS,      # ENTORNO: el mundo determinístico sobre el que se actúa.
+    TINTA,
+    FILL as _FILL,
+)
 
 
 def _caja(ax, x, y, w, h, texto, color, *, bold=False, fs=8.5):

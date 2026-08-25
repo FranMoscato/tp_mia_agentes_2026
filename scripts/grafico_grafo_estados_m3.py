@@ -44,10 +44,9 @@ _spec = importlib.util.spec_from_file_location("opt", _REPO / "eval" / "optimal.
 _opt = importlib.util.module_from_spec(_spec)
 _spec.loader.exec_module(_opt)
 
-# Colores: azul validado (react) para el óptimo; gris apagado para lo descartado.
-_AZUL = "#2a78d6"
-_GRIS = "#9aa0a8"
-_TINTA = "#1f2328"
+# Colores (paleta unificada, fuente única en estilo_diagramas.py): azul para el
+# óptimo; gris apagado para lo descartado.
+from estilo_diagramas import AZUL as _AZUL, GRIS as _GRIS, TINTA as _TINTA  # noqa: E402
 
 _ESCENARIO = _REPO / "scenarios" / "01-study-with-key.json"
 _PROFUNDIDAD = 3  # = óptimo del escenario (cross-validado con el enunciado)

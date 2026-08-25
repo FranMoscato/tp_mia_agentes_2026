@@ -17,16 +17,19 @@ matplotlib.use("Agg")
 from matplotlib.patches import FancyArrowPatch, FancyBboxPatch, Polygon
 import matplotlib.pyplot as plt
 
-AZUL = "#dbeafe"
-AZUL_B = "#2563eb"
-AMARILLO = "#fef9c3"
-AMARILLO_B = "#ca8a04"
-VERDE = "#dcfce7"
-VERDE_B = "#16a34a"
-ROJO = "#fee2e2"
-ROJO_B = "#dc2626"
-GRIS = "#f1f5f9"
-GRIS_B = "#94a3b8"
+# Paleta unificada (fuente única en estilo_diagramas.py). Armamos los pares
+# flowchart (fondo claro + borde) a partir de los saturados validados.
+from estilo_diagramas import (  # noqa: E402
+    AZUL as _AZUL, VERDE as _VERDE, AMBAR as _AMBAR, ROJO as _ROJO,
+    GRIS as _GRIS, VIOLETA as _VIOLETA, FILL,
+)
+
+AZUL, AZUL_B = FILL[_AZUL], _AZUL
+AMARILLO, AMARILLO_B = FILL[_AMBAR], _AMBAR
+VERDE, VERDE_B = FILL[_VERDE], _VERDE
+ROJO, ROJO_B = FILL[_ROJO], _ROJO
+GRIS, GRIS_B = FILL[_GRIS], _GRIS
+VIOLETA_B = _VIOLETA
 
 
 def caja(ax, x, y, w, h, texto, face, edge, fontsize=9.5, weight="normal"):
@@ -134,12 +137,12 @@ def main() -> None:
     # error -> volcado
     flecha(ax, (cx + 2.3, 2.2), (cx + 1.3, 1.6), rad=0.2)
     # volcado -> vuelve al chat (loop). Curva por la izquierda.
-    flecha(ax, (cx - 2.3, 1.15), (0.55, 1.15), color="#7c3aed")
+    flecha(ax, (cx - 2.3, 1.15), (0.55, 1.15), color=VIOLETA_B)
     ax.add_patch(FancyArrowPatch((0.55, 1.15), (0.55, 9.75),
                  connectionstyle="arc3,rad=0.0", arrowstyle="-",
-                 linewidth=1.5, color="#7c3aed", zorder=1))
+                 linewidth=1.5, color=VIOLETA_B, zorder=1))
     flecha(ax, (0.55, 9.75), (cx - 2.2, 9.75), "siguiente iteración\n(vuelve al LLM)",
-           color="#7c3aed", off=(0.4, 0.3))
+           color=VIOLETA_B, off=(0.4, 0.3))
 
     fig.text(0.5, 0.02,
              "Corte del bucle: el LLM responde sin tool_calls (respuesta final) "

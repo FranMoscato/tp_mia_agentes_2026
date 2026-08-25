@@ -23,18 +23,19 @@ matplotlib.use("Agg")
 from matplotlib.patches import FancyArrowPatch, FancyBboxPatch, Polygon
 import matplotlib.pyplot as plt
 
-AZUL = "#dbeafe"
-AZUL_B = "#2563eb"
-AMARILLO = "#fef9c3"
-AMARILLO_B = "#ca8a04"
-VERDE = "#dcfce7"
-VERDE_B = "#16a34a"
-ROJO = "#fee2e2"
-ROJO_B = "#dc2626"
-GRIS = "#f1f5f9"
-GRIS_B = "#94a3b8"
-VIOLETA = "#ede9fe"
-VIOLETA_B = "#7c3aed"
+# Paleta unificada (fuente única en estilo_diagramas.py). Pares flowchart
+# (fondo claro + borde) a partir de los saturados validados.
+from estilo_diagramas import (  # noqa: E402
+    AZUL as _AZUL, VERDE as _VERDE, AMBAR as _AMBAR, ROJO as _ROJO,
+    GRIS as _GRIS, VIOLETA as _VIOLETA, FILL,
+)
+
+AZUL, AZUL_B = FILL[_AZUL], _AZUL
+AMARILLO, AMARILLO_B = FILL[_AMBAR], _AMBAR
+VERDE, VERDE_B = FILL[_VERDE], _VERDE
+ROJO, ROJO_B = FILL[_ROJO], _ROJO
+GRIS, GRIS_B = FILL[_GRIS], _GRIS
+VIOLETA, VIOLETA_B = FILL[_VIOLETA], _VIOLETA
 
 DOCS = Path(__file__).resolve().parent.parent / "docs"
 

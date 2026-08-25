@@ -45,11 +45,15 @@ las herramientas del mundo y dejando operar el bucle ReAct de M1 (sense → deci
   corrija sobre la marcha —clave en un dominio donde equivocarse de llave o de
   ID es esperable.
 - **Estado y memoria (M2).** La sala de escape es un problema **estado-full**:
-  lo que se puede hacer depende de lo ya observado, tomado y abierto. La ventana
-  deslizante de M2 (recencia + preservación del turno inicial) mantiene el
-  objetivo presente en conversaciones largas, y los escenarios multi-sala
-  (`apartment-keys`, `office-sequence`) ejercitan justamente esa memoria: hay
-  que **navegar, recordar el mapa y volver**.
+  lo que se puede hacer depende de lo ya observado, tomado y abierto. Aplicamos
+  *context engineering* (Anthropic, *Effective context engineering for AI
+  agents*): la ventana deslizante de M2 **preserva** el ancla (el goal/turno
+  inicial) y **descarta** los turnos del medio —no solo por costo, sino porque
+  *"más contexto no es mejor contexto"* (Context Rot, uno de los cuatro
+  problemas del contexto de la clase: límite, costo, latencia, calidad)—. En la
+  taxonomía CoALA, esto es **memoria de trabajo** (la ventana); los escenarios
+  multi-sala (`apartment-keys`, `office-sequence`) la ejercitan: hay que
+  **navegar, recordar el mapa y volver**.
 
 ### 1.2 Especializaciones para M3
 
@@ -469,6 +473,12 @@ estudio (los demás quedan fijos).
    (evita self-preference y sube el techo del eval), y **convertir la rúbrica
    ordinal 1–5 en un checklist binario** de sub-criterios (más reproducible, sin
    la tendencia central que vimos), calibrado con kappa contra el golden set.
+6. **Memoria más allá de la de trabajo (CoALA).** Hoy el agente usa solo
+   **memoria de trabajo** (la ventana). Sumar memoria **episódica** (aprender
+   entre escenarios: "en la sala anterior la llave estaba bajo la alfombra") o
+   **semántica** (hechos persistentes del mundo) permitiría transferir
+   aprendizaje entre corridas, hoy imposible porque el estado vive solo en el
+   proceso.
 
 ---
 

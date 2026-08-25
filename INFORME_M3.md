@@ -110,14 +110,23 @@ aporta donde no la hay: en *cómo* se comportó en el camino (look al entrar,
 examinar antes de tomar, no repetir acciones, no usar objetos que no tiene), más
 allá del éxito binario.
 
-- **Cómo.** El judge puntúa la trayectoria **1–5** con una rúbrica explícita
+- **Cómo.** El judge puntúa la trayectoria con una rúbrica explícita
   ([`eval/judge.py`](eval/judge.py)), sobre la **traza real de tool-calls** (no
   sobre el output final, que muchas veces no llega). Devuelve el puntaje **y su
-  justificación**, para poder auditarlo.
-- **Confiabilidad (meta-eval).** Etiquetamos a mano las trazas del golden set y
-  medimos el **kappa de Cohen** entre el judge y el humano (`cohen_kappa`). Un
-  kappa alto valida el judge; uno bajo dice que hay que ajustar la rúbrica antes
-  de confiar en sus números.
+  justificación** —CoT que hace el veredicto auditable—. Es *pointwise* (puntúa
+  una trayectoria), lo apropiado para **monitorear** (la clase reserva *pairwise*
+  para *elegir* entre candidatas).
+- **Cuándo NO usar el judge.** Seguimos la regla de la clase: *"empujá todo lo
+  que puedas hacia código; el judge es para donde de verdad hace falta juicio"*.
+  El **éxito** (abrir la puerta) es verificación programática (`check_goal`), así
+  que **no** lo juzga el LLM; el judge solo cubre la calidad de exploración, donde
+  no hay verificación por código.
+- **Confiabilidad (meta-eval).** *"Un judge es un instrumento, no un oráculo: hay
+  que calibrarlo contra ground truth humano."* Etiquetamos a mano las trazas del
+  golden set y medimos el **kappa de Cohen** (`cohen_kappa`), que corrige el
+  acuerdo por azar —un judge que siempre dice lo mismo puede tener 95% de accuracy
+  y κ = 0—. Bandas: κ < 0.4 recalibrar, 0.4–0.6 tolerable, 0.6–0.8 trabajable. Si
+  el kappa es bajo, no usamos sus números aunque el judge ya esté construido.
 
 ### 2.3 Cómo se computan (reproducibilidad)
 
@@ -405,9 +414,17 @@ estudio (los demás quedan fijos).
 - **Óptimo como referencia de eficiencia.** El overhead es relativo al óptimo
   **derivado por búsqueda**; es una medida de eficiencia, no una afirmación de
   minimalidad absoluta (aunque coincide con el enunciado en los 8/8).
-- **Judge = LLM.** La dimensión cualitativa depende de un LLM; su confiabilidad
-  se apoya en el kappa contra etiquetas humanas del golden set. Un kappa bajo
-  invalidaría sus números.
+- **Judge = LLM, y con dos fallas de diseño que reconocemos.** (1) **Mismo modelo
+  como agente y como judge** (`qwen2.5:3b`). La clase marca dos anti-patrones que
+  incurrimos: **self-preference** (el judge prefiere sus propias salidas → debería
+  ser *distinto del generador*) y **capacidad del judge = techo del eval** (un
+  judge tan débil como el evaluado se pierde los errores que él mismo cometería).
+  Nuestro judge solo pudo puntuar 17–19/24 —evidencia directa de ese techo—; lo
+  correcto es un judge **más capaz** que el agente (p. ej. `nova-pro` juzgando a
+  `nova-lite`). (2) **Escala ordinal 1–5** cuando la clase recomienda **binario por
+  defecto**: nuestras notas se **amontonaron en 3** (tendencia central), justo el
+  problema que el checklist binario evita. Además su confiabilidad depende del
+  kappa contra el golden set humano; un kappa bajo invalidaría sus números.
 - **Escala del dataset.** 8 escenarios: los intervalos de confianza son anchos.
   pass^k y Wilson lo hacen explícito, pero no lo eliminan.
 - **`max_iterations = 30` es del harness**, no del enunciado: lo subimos para que
@@ -429,6 +446,10 @@ estudio (los demás quedan fijos).
    separar de forma limpia los límites del framework de los del modelo y ver si
    los efectos medidos (costo del resumen, limpieza del gate) persisten cuando la
    accuracy deja de ser 0.
+5. **Arreglar el judge.** Usar un modelo **más capaz y distinto** del agente
+   (evita self-preference y sube el techo del eval), y **convertir la rúbrica
+   ordinal 1–5 en un checklist binario** de sub-criterios (más reproducible, sin
+   la tendencia central que vimos), calibrado con kappa contra el golden set.
 
 ---
 

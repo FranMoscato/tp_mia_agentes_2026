@@ -196,6 +196,23 @@ def test_summarize_passk_ci_percentiles_y_costo() -> None:
     assert m["tokens_per_solved"] == 300
 
 
+def test_summarize_observabilidad_tools_invalidas_progreso() -> None:
+    cases = [
+        _case(config="react", tool_calls=3, tool_error_count=1,
+              steps=[
+                  {"tool_name": "look", "tool_input": "{}"},
+                  {"tool_name": "examine", "tool_input": "{}"},
+                  {"tool_name": "use", "tool_input": "{}", "error": "no lo tenés"},
+              ],
+              items_taken=2, rooms_visited=1, items_opened=1),
+    ]
+    m = eval_run.summarize(cases, 30)["by_config"]["react"]
+    assert m["tool_usage"] == {"look": 1, "examine": 1, "use": 1}
+    assert m["invalid_action_rate"] == round(1 / 3, 3)
+    assert m["avg_progress"]["items_taken"] == 2.0
+    assert m["avg_progress"]["items_opened"] == 1.0
+
+
 def test_summarize_desglosa_variantes_de_prosa() -> None:
     cases = [
         _case(config="react", scenario="s1", goal_achieved=False, tool_calls=2,

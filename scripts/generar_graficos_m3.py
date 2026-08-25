@@ -104,6 +104,55 @@ def grafico_fallos(by_config: dict, meta: dict) -> None:
     plt.close(fig)
 
 
+def grafico_costo(by_config: dict, meta: dict) -> None:
+    """Tokens por caso, apilando agente vs summarizer (costo del resumen)."""
+    configs = _orden_configs(by_config)
+    agente = [by_config[c].get("avg_agent_tokens") or 0 for c in configs]
+    resumen = [by_config[c].get("avg_memory_tokens") or 0 for c in configs]
+
+    fig, ax = plt.subplots(figsize=(7, 4.2))
+    b1 = ax.bar(configs, agente, label="tokens agente", color="#2563eb")
+    b2 = ax.bar(configs, resumen, bottom=agente, label="tokens summarizer",
+                color="#f59e0b")
+    ax.bar_label(b1, fmt="%.0f", fontsize=8, label_type="center")
+    for i, r in enumerate(resumen):
+        if r:
+            ax.text(i, agente[i] + r + max(agente + resumen) * 0.01, f"+{r:.0f}",
+                    ha="center", fontsize=8, color="#b45309")
+    ax.set_ylabel("Tokens promedio por caso")
+    ax.set_title(f"Costo en tokens por configuración\n({meta.get('provider')}/{meta.get('model')})")
+    ax.legend()
+    ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout()
+    fig.savefig(_DOCS / "m3_costo.png", dpi=150)
+    plt.close(fig)
+
+
+def grafico_tools(by_config: dict, meta: dict) -> None:
+    """Perfil de uso de herramientas por configuración (apilado por verbo)."""
+    configs = _orden_configs(by_config)
+    verbos = ["look", "examine", "take", "use", "go"]
+    colores = {"look": "#93c5fd", "examine": "#60a5fa", "take": "#2563eb",
+               "use": "#1e40af", "go": "#7c3aed"}
+
+    fig, ax = plt.subplots(figsize=(7, 4.2))
+    bottoms = [0] * len(configs)
+    for v in verbos:
+        vals = [by_config[c].get("tool_usage", {}).get(v, 0) for c in configs]
+        if not any(vals):
+            continue
+        ax.bar(configs, vals, bottom=bottoms, label=v, color=colores.get(v, "#94a3b8"))
+        bottoms = [b + x for b, x in zip(bottoms, vals)]
+    ax.set_ylabel("Tool-calls totales")
+    ax.set_title(f"Perfil de uso de herramientas por configuración\n"
+                 f"({meta.get('provider')}/{meta.get('model')})")
+    ax.legend(fontsize=8)
+    ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout()
+    fig.savefig(_DOCS / "m3_tools.png", dpi=150)
+    plt.close(fig)
+
+
 def grafico_judge(judge_summary: dict, meta: dict) -> None:
     configs = [c for c in ("react", "summarizer", "gate") if c in judge_summary]
     if not configs:
@@ -137,13 +186,15 @@ def main() -> None:
     _DOCS.mkdir(exist_ok=True)
     grafico_latencia(by_config, meta)
     grafico_fallos(by_config, meta)
+    grafico_costo(by_config, meta)
+    grafico_tools(by_config, meta)
+    generados = ["m3_latencia.png", "m3_fallos.png", "m3_costo.png", "m3_tools.png"]
 
     judge_path = results / "judge_summary.json"
     if judge_path.exists():
         grafico_judge(json.loads(judge_path.read_text(encoding="utf-8")), meta)
-        print("Generados: m3_latencia.png, m3_fallos.png, m3_judge.png")
-    else:
-        print("Generados: m3_latencia.png, m3_fallos.png (sin judge_summary.json)")
+        generados.append("m3_judge.png")
+    print("Generados:", ", ".join(generados))
 
     print(f"Fuente: {results}")
 

@@ -208,6 +208,30 @@ experimentos (costo del resumen, limpieza del gate) deberían **persistir entre
 modelos**, mientras que la **accuracy** debería subir con el modelo fuerte —lo
 que confirmaría que el 0/8 es del modelo, no del framework.
 
+### 3.6 Observabilidad: perfil de comportamiento
+
+Para no reducir todo a "0/8", instrumentamos **qué hace** el agente:
+
+![Perfil de uso de herramientas por configuración](docs/m3_tools.png)
+
+- **Perfil de uso de herramientas.** El agente **explora pero no ejecuta**:
+  domina `look`/`examine`, hace poco `take`, **casi nada de `use`** y **cero
+  `go`**. Como abrir la puerta requiere `use`, este perfil *es* la explicación
+  del 0/8 —y encaja con el modo `prosa_en_vez_de_tool`: describe el `use` en
+  texto en vez de emitirlo.
+- **Tasa de acción inválida** (`tool_errors/tool_calls`): `react` 0.0, `gate`
+  0.0, `summarizer` 0.06. Baja en todos porque el agente apenas llega a
+  intentar acciones que un gate rechazaría; el gate la mantiene en 0 por
+  construcción.
+- **Progreso parcial** (`items_taken`, `rooms_visited`, `items_opened`): con
+  `qwen2.5:3b` es ~0 (el agente se traba antes de avanzar). Esta métrica se
+  captura por corrida y será informativa con un modelo que sí actúe (Bedrock):
+  permite medir *cuánto* avanzó aunque no abra la puerta.
+
+**Costo en tokens** (agente vs. summarizer):
+
+![Costo en tokens por configuración](docs/m3_costo.png)
+
 ---
 
 ## 4. Experimentos

@@ -278,6 +278,24 @@ def summarize(cases: list[dict[str, Any]], max_iterations: int) -> dict[str, Any
 
         latencias = [c["latency_s"] for c in sub]
 
+        # Observabilidad del comportamiento:
+        # - uso de herramientas (¿sobre-mira?, ¿nunca usa?)
+        # - tasa de acción inválida (tool_errors / tool_calls): movidas ilegales
+        #   que el gate atrapa.
+        tool_usage: dict[str, int] = {}
+        for c in sub:
+            for s in c.get("steps") or []:
+                t = s.get("tool_name")
+                tool_usage[t] = tool_usage.get(t, 0) + 1
+        total_calls = sum(c["tool_calls"] for c in sub)
+        total_err = sum(c.get("tool_error_count", 0) for c in sub)
+        invalid_rate = round(total_err / total_calls, 3) if total_calls else None
+
+        # Progreso parcial (observabilidad, para no reducir todo a 0/8): cuánto
+        # avanzó el agente aunque no abriera la puerta. Presente solo en corridas
+        # que lo capturan (ver run_one); en las previas queda en 0.
+        prog = lambda key: _mean([c.get(key, 0) for c in sub])
+
         summary["by_config"][config] = {
             "n": n,
             "solved": len(exitosos),
@@ -297,6 +315,13 @@ def summarize(cases: list[dict[str, Any]], max_iterations: int) -> dict[str, Any
             "avg_memory_tokens": _mean(
                 [c["memory_input_tokens"] + c["memory_output_tokens"] for c in sub]
             ),
+            "tool_usage": tool_usage,
+            "invalid_action_rate": invalid_rate,
+            "avg_progress": {
+                "items_taken": prog("items_taken"),
+                "rooms_visited": prog("rooms_visited"),
+                "items_opened": prog("items_opened"),
+            },
             "failure_breakdown": cats,
             "prosa_variant_breakdown": prosa_variantes,
             "by_difficulty": by_diff,
@@ -459,6 +484,12 @@ def run_one(
     steps = [asdict(s) for s in result.steps] if result else []
     tool_errors = [s for s in steps if s.get("error")]
 
+    # Progreso parcial (observabilidad): cuánto avanzó el mundo aunque el goal
+    # no se cumpla. Se lee del estado final del world.
+    rooms_visited = len({e.split(":", 1)[1] for e in world.event_log
+                         if e.startswith("enter:")})
+    items_opened = sum(1 for it in world.items.values() if it.open_state == "open")
+
     return {
         "scenario": scenario.id,
         "difficulty": scenario.difficulty,
@@ -467,6 +498,9 @@ def run_one(
         "optimal_calls": optimal_calls,
         "goal_achieved": bool(achieved),
         "goal_reason": reason,
+        "items_taken": len(world.inventory),
+        "rooms_visited": rooms_visited,
+        "items_opened": items_opened,
         "crashed": crashed,
         "error": error_repr,
         "answer": result.answer if result else None,

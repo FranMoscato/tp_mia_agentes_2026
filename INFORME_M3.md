@@ -64,9 +64,13 @@ Lo mínimo, y todo **detrás de config/flags** para no contaminar M1/M2:
   cada corrida.
 - **Summarizer de estado (opcional).** Un `GameState` estructurado que, antes de
   cada llamada, re-deriva el estado de la partida (inventario, ubicación,
-  acciones, salidas) con una llamada LLM extra y lo inyecta como contexto. Es
-  **memoria comprimida**, activable con `use_summarizer`; su costo se contabiliza
-  **aparte** para que el experimento compare de forma justa.
+  acciones, salidas) con una llamada LLM extra y lo inyecta como contexto. Parte
+  de tratar el *contexto como recurso escaso* (clase): la ventana es limitante y
+  **qué inyectar es una decisión de ingeniería con costo**. Elegimos memoria
+  **estructurada** y no un resumen de texto libre a propósito —la clase señala
+  que *"la estructura fuerza a curar, con menos pérdida que un resumen libre"*—.
+  Activable con `use_summarizer`; su costo se contabiliza **aparte** para que el
+  experimento compare de forma justa.
 - **Gate determinístico (opcional).** Es el **patrón de gate** de la clase (el
   chequeo determinístico entre pasos del *prompt chaining*): *"ningún prompt
   garantiza 'monto ≤ límite'; un gate sí"*. Cumple las tres funciones que la

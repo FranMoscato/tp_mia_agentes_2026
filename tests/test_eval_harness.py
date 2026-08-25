@@ -244,6 +244,24 @@ def test_summarize_costo_varianza_redundancia() -> None:
     assert m["redundancy_distribution"] == {"1": 1, "3": 1}
 
 
+def test_summarize_failure_priority_frecuencia_por_costo() -> None:
+    cases = [
+        # prosa: frecuente y barata
+        _case(config="react", scenario="s1", goal_achieved=False, tool_calls=1, latency_s=2.0),
+        _case(config="react", scenario="s2", goal_achieved=False, tool_calls=1, latency_s=2.0),
+        _case(config="react", scenario="s3", goal_achieved=False, tool_calls=1, latency_s=2.0),
+        # loop: raro pero caro
+        _case(config="react", scenario="s4", goal_achieved=False, latency_s=100.0,
+              steps=[{"tool_name": "use", "tool_input": "{}"} for _ in range(3)]),
+    ]
+    fp = eval_run.summarize(cases, 30)["failure_priority"]
+    # loop (1×100=100s) prioriza sobre prosa (3×2=6s) pese a ser menos frecuente.
+    assert list(fp)[0] == "loop_detected"
+    assert fp["loop_detected"]["freq"] == 1
+    assert fp["prosa_en_vez_de_tool"]["freq"] == 3
+    assert fp["loop_detected"]["total_latency_s"] == 100.0
+
+
 def test_summarize_desglosa_variantes_de_prosa() -> None:
     cases = [
         _case(config="react", scenario="s1", goal_achieved=False, tool_calls=2,

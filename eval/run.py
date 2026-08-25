@@ -394,6 +394,23 @@ def summarize(
             "by_difficulty": by_diff,
         }
 
+    # Prioridad de los modos de fallo por FRECUENCIA × COSTO (no por frecuencia
+    # sola): un modo raro pero caro puede pesar tanto como uno frecuente y
+    # barato. Costo = latencia total atribuible al modo. Global (todas las
+    # configs). Ordenado por costo total descendente.
+    prio: dict[str, dict[str, Any]] = {}
+    for c in cases:
+        cat = categorize(c, max_iterations)
+        p = prio.setdefault(cat, {"freq": 0, "total_latency_s": 0.0})
+        p["freq"] += 1
+        p["total_latency_s"] += c["latency_s"]
+    for p in prio.values():
+        p["avg_latency_s"] = round(p["total_latency_s"] / p["freq"], 1)
+        p["total_latency_s"] = round(p["total_latency_s"], 1)
+    summary["failure_priority"] = dict(
+        sorted(prio.items(), key=lambda kv: -kv[1]["total_latency_s"])
+    )
+
     return summary
 
 

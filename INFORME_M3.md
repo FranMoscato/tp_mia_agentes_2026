@@ -77,6 +77,17 @@ escenario cuenta como resuelto solo si `check_goal` verifica el cambio físico
 (p. ej. `puerta_principal.open_state == "open"`). Esto da una señal objetiva e
 inmune a que el agente "diga" que resolvió.
 
+**Marco conceptual (clase de evaluación de agentes).** Tratamos la eval como una
+*especificación ejecutable* —"de 'lo probé y anda' a una spec"—, no como un test
+de igualdad: en un agente *"correcto es un juicio, no una igualdad verificable"*.
+De ahí tres decisiones que fundamentan lo que sigue: (1) reportamos un **vector
+de dimensiones**, no un score único, porque *"la calidad no es un escalar"* y *"un
+score único es cómodo para un dashboard y desastroso para diagnosticar"*; (2) las
+restricciones **duras** (el goal, verificado por `check_goal`) son un **gate
+binario**, no un término de un promedio ponderado *("las duras son un gate, no un
+término de una suma")*; (3) como *"una corrida es una anécdota, no una medición"*,
+cada métrica viaja con su dispersión (pass^k, IC de Wilson, repeats).
+
 ### 2.1 Cuantitativas
 
 | Métrica | Qué mide | Por qué la elegimos |
@@ -90,11 +101,14 @@ inmune a que el agente "diga" que resolvió.
 ### 2.2 Dimensión cualitativa (LLM-as-judge)
 
 La dimensión es **calidad de la trayectoria**: *¿el agente exploró con método?*
-La elegimos así deliberadamente: si el agente **abrió la puerta**, eso ya lo
-verifica `check_goal` **por código**, y la regla de la clase 8 es **no usar un
-judge donde hay verificación programática**. El judge aporta donde no la hay: en
-*cómo* se comportó en el camino (look al entrar, examinar antes de tomar, no
-repetir acciones, no usar objetos que no tiene), más allá del éxito binario.
+(Usamos los términos con precisión: la **trayectoria** es la secuencia de
+decisiones —el concepto—; el **trace** es su registro instrumentado —el
+artefacto— que el judge lee.) La elegimos así deliberadamente: si el agente
+**abrió la puerta**, eso ya lo verifica `check_goal` **por código**, y la regla
+de la clase es **no usar un judge donde hay verificación programática**. El judge
+aporta donde no la hay: en *cómo* se comportó en el camino (look al entrar,
+examinar antes de tomar, no repetir acciones, no usar objetos que no tiene), más
+allá del éxito binario.
 
 - **Cómo.** El judge puntúa la trayectoria **1–5** con una rúbrica explícita
   ([`eval/judge.py`](eval/judge.py)), sobre la **traza real de tool-calls** (no
@@ -157,7 +171,15 @@ vault-combination 21 · backtracking-vault 18.
 
 ### 3.3 Análisis de errores (sobre trazas reales)
 
-Categorías (definidas y verificadas **mirando trazas**, no a priori):
+**Método (deductivo → inductivo).** Siguiendo la clase, las dimensiones de fallo
+tienen dos orígenes: *deductivo* (a priori, del dominio) e *inductivo* (a
+posteriori, de mirar salidas reales). Arrancamos con categorías genéricas
+razonables (`crash`, `exhausted_iterations`, `tool_errors`…), pero la categoría
+que domina —`prosa_en_vez_de_tool`, con sus variantes— **no se podía imaginar de
+antemano**: salió de mirar los traces. Es la advertencia de la clase: *"si
+empezás con categorías, vas a encontrar solo lo que ya sabías"*. Por eso las
+categorías que reportamos están **definidas y verificadas mirando trazas**, no a
+priori:
 `success` · `crash` · `loop_detected` · `exhausted_iterations` · `tool_errors` ·
 `prosa_en_vez_de_tool`.
 
@@ -194,6 +216,22 @@ loopea** (casos con rachas de 3 y hasta 5). Consistente con que re-inyectar un
 estado resumido a veces **refuerza** una acción equivocada en lugar de
 corregirla —otro costo del resumen, además de la latencia.
 
+**Prioridad = frecuencia × costo, no frecuencia sola.** La clase advierte que
+priorizar por frecuencia esconde los modos raros pero caros. Lo computamos
+(`failure_priority` en el `summary.json`, costo = latencia total atribuible):
+
+| Modo de fallo | Frecuencia | Latencia media | **Costo total (freq × costo)** |
+|---|---:|---:|---:|
+| `prosa_en_vez_de_tool` | 67 | 9.4 s | 628 s |
+| `loop_detected` | **3** | **155.7 s** | **467 s** |
+| `tool_errors` | 2 | 49.5 s | 99 s |
+
+Por **frecuencia** manda la prosa (67 vs 3). Pero los **loops**, con solo 3
+casos, cuestan casi lo mismo en total (467 s) porque cada uno es **17× más caro**
+(155 s vs 9 s). Priorizar por frecuencia sola habría descartado los loops; por
+frecuencia × costo, son un objetivo de primera —y quien los produce es el
+`summarizer`, lo que refuerza la conclusión del Experimento 1.
+
 ### 3.4 Resultados cualitativos (LLM-as-judge)
 
 Calidad de exploración (1–5), sobre las trazas reales:
@@ -220,7 +258,10 @@ es la que valida sus números, y esperamos cobertura completa en Bedrock.
 
 Como los resultados de accuracy están acotados por el modelo, comparamos **el
 mismo framework sobre varios modelos** para separar *límites del modelo* de
-*límites del framework*. Cada corrida versiona su `provider`/`model`, y
+*límites del framework*. Esto es también una técnica de **error analysis
+inductivo** de la clase —*"otro modelo haciendo la tarea sirve para descubrir qué
+se rompe"*—: correr un segundo modelo destapó modos de fallo que uno solo
+escondía. Cada corrida versiona su `provider`/`model`, y
 `scripts/comparar_modelos_m3.py` arma la comparativa a partir de todas las
 corridas presentes —basta correr un modelo nuevo y volver a ejecutarlo. Corrimos
 `qwen2.5:3b` y `llama3.2` (Ollama, repeats-3); queda pendiente `nova-lite`

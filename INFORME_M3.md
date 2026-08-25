@@ -236,7 +236,11 @@ trazas reales:
 
 El fallo es de **disciplina de tool-calling**, no de razonamiento espacial: el
 agente entiende qué hacer pero lo **describe** en vez de emitir el `tool_call`.
-Por eso el gate (§4.2) no lo elimina —solo limpia los fallos por uso inválido.
+En términos del protocolo de tool use (Clase 3), **falla el "Turn 1"**: en vez de
+emitir un `toolUse` (`stopReason = tool_use`), devuelve texto
+(`stopReason = end_turn`), lo que **cierra el loop** antes de actuar. Por eso el
+gate (§4.2) no lo elimina —el gate valida un `toolUse` que acá **nunca llega**;
+solo limpia los fallos por uso inválido cuando el modelo sí actúa.
 
 **Redundancia (señal de loop).** Medimos la racha máxima de tool-calls idénticas
 por caso:

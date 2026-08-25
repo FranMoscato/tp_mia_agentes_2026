@@ -68,7 +68,7 @@ def test_categorize_exhausted_iterations() -> None:
 def test_categorize_no_exhausted_por_tool_calls() -> None:
     """Muchas tool-calls pero sin agotar el presupuesto de llamadas: no es exhausted."""
     caso = _case(llm_calls=12, tool_calls=30, tool_error_count=0)
-    assert eval_run.categorize(caso, 30) == "wrong_path"
+    assert eval_run.categorize(caso, 30) == "prosa_en_vez_de_tool"
 
 
 def test_categorize_loop_detected() -> None:
@@ -91,16 +91,37 @@ def test_look_repetido_intercalado_no_es_loop() -> None:
         steps.append({"tool_name": "look", "tool_input": "{}"})
         steps.append({"tool_name": "go", "tool_input": f'{{"direction": "{direccion}"}}'})
     assert eval_run.repeticiones_consecutivas(steps) == 1
-    assert eval_run.categorize(_case(steps=steps), 30) == "wrong_path"
+    assert eval_run.categorize(_case(steps=steps), 30) == "prosa_en_vez_de_tool"
 
 
 def test_categorize_tool_errors() -> None:
     assert eval_run.categorize(_case(tool_calls=5, tool_error_count=2), 30) == "tool_errors"
 
 
-def test_categorize_wrong_path() -> None:
-    # Terminó sin goal, sin agotar iteraciones y sin errores de tools.
-    assert eval_run.categorize(_case(tool_calls=4, tool_error_count=0), 30) == "wrong_path"
+def test_categorize_prosa_en_vez_de_tool() -> None:
+    # Terminó sin goal, sin loop, sin agotar iteraciones y sin errores de tools:
+    # el modelo dejó de pedir herramientas y devolvió texto (modo dominante).
+    assert eval_run.categorize(_case(tool_calls=4, tool_error_count=0), 30) == "prosa_en_vez_de_tool"
+
+
+# --- clasificar_prosa (variantes del modo dominante, de trazas reales) ------
+
+
+def test_clasificar_prosa_inversion_de_rol() -> None:
+    # Del piloto real (color-locks): imparte instrucciones a un tercero.
+    assert eval_run.clasificar_prosa("Haz uso de la llave plateada en el cofre.") == "inversion_de_rol"
+    assert eval_run.clasificar_prosa("Ve a la estantería y examina los volúmenes.") == "inversion_de_rol"
+
+
+def test_clasificar_prosa_intencion_anunciada() -> None:
+    # Del piloto real (study-with-key): anuncia lo que hará en 1ª persona.
+    assert eval_run.clasificar_prosa("Volveré a examinar el escritorio.") == "intencion_anunciada"
+    assert eval_run.clasificar_prosa("Ahora tengo la llave dorada en mi inventario.") == "intencion_anunciada"
+
+
+def test_clasificar_prosa_otro_y_vacio() -> None:
+    assert eval_run.clasificar_prosa("") == "otro"
+    assert eval_run.clasificar_prosa(None) == "otro"
 
 
 # --- summarize -------------------------------------------------------------
@@ -144,6 +165,49 @@ def test_summarize_accuracy_por_dificultad() -> None:
     by_diff = eval_run.summarize(cases, 30)["by_config"]["react"]["by_difficulty"]
     assert by_diff["easy"]["accuracy"] == 1.0
     assert by_diff["hard"]["accuracy"] == 0.0
+
+
+def test_summarize_passk_ci_percentiles_y_costo() -> None:
+    # 2 escenarios × k=2 repeats. easy-1: 2/2 resuelto; hard-1: 0/2.
+    cases = [
+        _case(config="react", scenario="easy-1", difficulty="easy",
+              goal_achieved=True, latency_s=1.0),
+        _case(config="react", scenario="easy-1", difficulty="easy",
+              goal_achieved=True, latency_s=3.0),
+        _case(config="react", scenario="hard-1", difficulty="hard",
+              goal_achieved=False, latency_s=2.0, llm_calls=30, tool_calls=29),
+        _case(config="react", scenario="hard-1", difficulty="hard",
+              goal_achieved=False, latency_s=4.0, llm_calls=30, tool_calls=29),
+    ]
+    m = eval_run.summarize(cases, 30)["by_config"]["react"]
+
+    # pass^k: solo easy-1 pasa los k=2 intentos -> 1/2 escenarios.
+    assert m["k"] == 2
+    assert m["pass_k_scenarios"] == "1/2"
+    assert m["pass_hat_k"] == 0.5
+    # IC de Wilson para 2/4 resueltos: intervalo válido que rodea 0.5.
+    lo, hi = m["accuracy_ci95"]
+    assert 0.0 <= lo < 0.5 < hi <= 1.0
+    # Latencia por percentiles, no promedio.
+    assert m["latency_p50_s"] is not None
+    assert m["latency_p95_s"] is not None
+    # Costo por caso RESUELTO: tokens totales (incluye fallidos) / resueltos.
+    # 4 casos × 150 tokens (default) = 600; / 2 resueltos = 300.
+    assert m["tokens_per_solved"] == 300
+
+
+def test_summarize_desglosa_variantes_de_prosa() -> None:
+    cases = [
+        _case(config="react", scenario="s1", goal_achieved=False, tool_calls=2,
+              answer="Haz uso de la llave en el cofre."),
+        _case(config="react", scenario="s2", goal_achieved=False, tool_calls=2,
+              answer="Volveré a examinar el escritorio."),
+    ]
+    m = eval_run.summarize(cases, 30)["by_config"]["react"]
+    assert m["failure_breakdown"]["prosa_en_vez_de_tool"] == 2
+    vb = m["prosa_variant_breakdown"]
+    assert vb.get("inversion_de_rol") == 1
+    assert vb.get("intencion_anunciada") == 1
 
 
 # --- report_md -------------------------------------------------------------

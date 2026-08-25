@@ -31,6 +31,10 @@ from __future__ import annotations
 import argparse
 import importlib
 import json
+import math
+import os
+import re
+import subprocess
 import sys
 import time
 from dataclasses import asdict
@@ -100,16 +104,58 @@ def repeticiones_consecutivas(steps: list[dict[str, Any]]) -> int:
     return mejor
 
 
+# Marcadores de las dos variantes de "prosa en vez de tool_call" (clase 7 /
+# punto de análisis de errores). Se aplican al `answer` final del caso.
+#   - inversión de rol: el modelo IMPARTE instrucciones a un tercero en vez de
+#     actuar ("Haz uso de...", "Ve a...", "Examina...", "Haz lo siguiente:").
+#   - intención anunciada: el modelo ANUNCIA lo que va a hacer, en primera
+#     persona, en vez de hacerlo ("Voy a...", "Volveré a...", "Ahora tengo...").
+_RE_INVERSION_ROL = re.compile(
+    r"^\s*(haz\b|hac[eé]\b|us[aá]\b|utiliz[aá]\b|tom[aá]\b|v[eé]\b|and[aá]\b|"
+    r"examin[aá]\b|abr[ií]\b|explor[aá]\b|prob[aá]\b|primero[,\s]|"
+    r"haz lo siguiente|deber[ií]as\b|ten[eé]s que\b)",
+    re.IGNORECASE,
+)
+_RE_INTENCION_ANUNCIADA = re.compile(
+    r"^\s*(voy a\b|voyar[eé]\b|ir[eé]\b|volver[eé]\b|har[eé]\b|proceder[eé]\b|"
+    r"intentar[eé]\b|ahora (tengo|voy|proceder|examinar)|"
+    r"a continuaci[oó]n voy|mi (siguiente|pr[oó]xim)|deber[ií]a (ahora|ahora )?)",
+    re.IGNORECASE,
+)
+
+
+def clasificar_prosa(answer: str | None) -> str:
+    """Sub-clasifica el `answer` de un caso `prosa_en_vez_de_tool`.
+
+    Devuelve 'inversion_de_rol' | 'intencion_anunciada' | 'otro'. Es una
+    heurística sobre el texto: el modo de fallo real observado en las trazas
+    tiene estas dos variantes (punto de análisis de errores de la clase 7).
+    """
+    texto = (answer or "").strip()
+    if not texto:
+        return "otro"
+    if _RE_INTENCION_ANUNCIADA.match(texto):
+        return "intencion_anunciada"
+    if _RE_INVERSION_ROL.match(texto):
+        return "inversion_de_rol"
+    return "otro"
+
+
 def categorize(case: dict[str, Any], max_iterations: int) -> str:
     """Clasifica el resultado de una corrida en un modo de fallo (o éxito).
 
     Categorías:
-      - success              — se abrió la puerta (goal cumplido).
-      - crash                — la corrida lanzó una excepción no controlada.
-      - loop_detected        — repitió la misma tool-call en círculos.
-      - exhausted_iterations — agotó el tope de iteraciones sin lograr el goal.
-      - tool_errors          — terminó sin goal y hubo errores de herramientas.
-      - wrong_path           — terminó "tranquilo" sin goal (razonó mal el camino).
+      - success               — se abrió la puerta (goal cumplido).
+      - crash                 — la corrida lanzó una excepción no controlada.
+      - loop_detected         — repitió la misma tool-call en círculos.
+      - exhausted_iterations  — agotó el tope de iteraciones sin lograr el goal.
+      - tool_errors           — terminó sin goal y hubo errores de herramientas.
+      - prosa_en_vez_de_tool  — terminó devolviendo TEXTO en lugar de una
+                                tool-call (el modo dominante observado). Es la
+                                única otra salida del bucle de `run()`: el
+                                modelo dejó de pedir herramientas y "habló".
+                                Sus variantes (inversión de rol / intención
+                                anunciada) se desglosan con `clasificar_prosa`.
 
     `loop_detected` va ANTES que `exhausted_iterations` a propósito: una
     corrida en loop casi siempre agota también las iteraciones, y el loop es
@@ -131,11 +177,39 @@ def categorize(case: dict[str, Any], max_iterations: int) -> str:
         return "exhausted_iterations"
     if case["tool_error_count"] > 0:
         return "tool_errors"
-    return "wrong_path"
+    return "prosa_en_vez_de_tool"
 
 
 def _mean(xs: list[float]) -> float | None:
     return round(sum(xs) / len(xs), 2) if xs else None
+
+
+def _percentile(xs: list[float], p: float) -> float | None:
+    """Percentil `p` (0..1) por interpolación lineal. `None` si no hay datos."""
+    if not xs:
+        return None
+    ys = sorted(xs)
+    if len(ys) == 1:
+        return round(ys[0], 3)
+    k = (len(ys) - 1) * p
+    lo = math.floor(k)
+    hi = min(lo + 1, len(ys) - 1)
+    return round(ys[lo] + (ys[hi] - ys[lo]) * (k - lo), 3)
+
+
+def _wilson_ci(k: int, n: int, z: float = 1.96) -> list[float | None]:
+    """Intervalo de confianza de Wilson (95%) para una proporción k/n.
+
+    Mejor que la normal para n chico / proporciones cerca de 0 o 1, que es
+    justo el régimen de esta eval (8 escenarios, pocos repeats).
+    """
+    if n == 0:
+        return [None, None]
+    phat = k / n
+    denom = 1 + z * z / n
+    centro = (phat + z * z / (2 * n)) / denom
+    margen = (z * math.sqrt(phat * (1 - phat) / n + z * z / (4 * n * n))) / denom
+    return [round(max(0.0, centro - margen), 3), round(min(1.0, centro + margen), 3)]
 
 
 def summarize(cases: list[dict[str, Any]], max_iterations: int) -> dict[str, Any]:
@@ -156,11 +230,16 @@ def summarize(cases: list[dict[str, Any]], max_iterations: int) -> dict[str, Any
             if c.get("optimal_calls")
         ]
 
-        # Desglose de categorías de fallo.
+        # Desglose de categorías de fallo + variantes de la prosa (modo
+        # dominante), estas últimas sobre el `answer` real de cada caso.
         cats: dict[str, int] = {}
+        prosa_variantes: dict[str, int] = {}
         for c in sub:
             cat = categorize(c, max_iterations)
             cats[cat] = cats.get(cat, 0) + 1
+            if cat == "prosa_en_vez_de_tool":
+                v = clasificar_prosa(c.get("answer"))
+                prosa_variantes[v] = prosa_variantes.get(v, 0) + 1
 
         # Accuracy por dificultad.
         by_diff: dict[str, dict[str, Any]] = {}
@@ -172,13 +251,42 @@ def summarize(cases: list[dict[str, Any]], max_iterations: int) -> dict[str, Any
                 "accuracy": round(sum(c["goal_achieved"] for c in d) / len(d), 3),
             }
 
+        # pass^k: el agente actúa sin supervisión, así que la métrica relevante
+        # es "resolver el escenario en TODOS los k intentos", no el promedio.
+        by_scen: dict[str, list[dict[str, Any]]] = {}
+        for c in sub:
+            by_scen.setdefault(c["scenario"], []).append(c)
+        k = max((len(v) for v in by_scen.values()), default=0)
+        pass_k_scen = sum(
+            1 for v in by_scen.values() if v and all(x["goal_achieved"] for x in v)
+        )
+        pass_hat_k = round(pass_k_scen / len(by_scen), 3) if by_scen else None
+
+        # Costo POR CASO RESUELTO (no por corrida): tokens totales / resueltos.
+        tokens_totales = sum(
+            c["agent_input_tokens"] + c["agent_output_tokens"]
+            + c["memory_input_tokens"] + c["memory_output_tokens"]
+            for c in sub
+        )
+        tokens_por_resuelto = (
+            round(tokens_totales / len(exitosos)) if exitosos else None
+        )
+
+        latencias = [c["latency_s"] for c in sub]
+
         summary["by_config"][config] = {
             "n": n,
             "solved": len(exitosos),
             "accuracy": round(len(exitosos) / n, 3) if n else None,
+            "accuracy_ci95": _wilson_ci(len(exitosos), n),
+            "pass_hat_k": pass_hat_k,
+            "k": k,
+            "pass_k_scenarios": f"{pass_k_scen}/{len(by_scen)}",
             "avg_calls_overhead_vs_optimal": _mean(overhead),
             "avg_tool_calls": _mean([c["tool_calls"] for c in sub]),
-            "avg_latency_s": _mean([c["latency_s"] for c in sub]),
+            "latency_p50_s": _percentile(latencias, 0.50),
+            "latency_p95_s": _percentile(latencias, 0.95),
+            "tokens_per_solved": tokens_por_resuelto,
             "avg_agent_tokens": _mean(
                 [c["agent_input_tokens"] + c["agent_output_tokens"] for c in sub]
             ),
@@ -186,6 +294,7 @@ def summarize(cases: list[dict[str, Any]], max_iterations: int) -> dict[str, Any
                 [c["memory_input_tokens"] + c["memory_output_tokens"] for c in sub]
             ),
             "failure_breakdown": cats,
+            "prosa_variant_breakdown": prosa_variantes,
             "by_difficulty": by_diff,
         }
 
@@ -199,26 +308,36 @@ def report_md(summary: dict[str, Any], meta: dict[str, Any]) -> str:
     lines.append("")
     lines.append(f"- Fecha: {meta['timestamp']}")
     lines.append(f"- Módulo del agente: `{meta['module']}`")
+    lines.append(f"- Modelo: `{meta.get('bedrock_model_id')}` · perfil AWS: `{meta.get('aws_profile')}`")
+    lines.append(f"- Versión de prompt: `{meta.get('prompt_version')}` · commit: `{meta.get('git_commit')}`")
     lines.append(f"- max_iterations: {meta['max_iterations']} · repeats: {meta['repeats']}")
     lines.append(f"- Casos totales: {summary['n_cases']}")
     lines.append("")
 
     lines.append("## Métricas por configuración")
     lines.append("")
+    lines.append("_Latencia en percentiles (nunca promedio); costo por caso resuelto; "
+                 "pass^k = resolver el escenario en los k intentos._")
+    lines.append("")
     header = (
-        "| Config | Accuracy | Resueltos | Overhead vs óptimo | "
-        "Tokens agente | Tokens resumen | Latencia (s) |"
+        "| Config | Accuracy (IC95%) | pass^k | Overhead vs óptimo | "
+        "Tokens/resuelto | Latencia p50/p95 (s) |"
     )
     lines.append(header)
-    lines.append("|---|---:|---:|---:|---:|---:|---:|")
+    lines.append("|---|---:|---:|---:|---:|---:|")
     for config, m in summary["by_config"].items():
-        # El overhead solo existe si hubo casos resueltos; sin eso, "—".
         overhead = m["avg_calls_overhead_vs_optimal"]
         overhead_txt = f"{overhead}x" if overhead is not None else "—"
+        ci = m["accuracy_ci95"]
+        ci_txt = f" [{ci[0]}, {ci[1]}]" if ci and ci[0] is not None else ""
+        passk_txt = (
+            f"{m['pass_hat_k']} ({m['pass_k_scenarios']}, k={m['k']})"
+            if m["pass_hat_k"] is not None else "—"
+        )
         lines.append(
-            f"| {config} | {m['accuracy']} | {m['solved']}/{m['n']} | "
-            f"{overhead_txt} | {m['avg_agent_tokens']} | "
-            f"{m['avg_memory_tokens']} | {m['avg_latency_s']} |"
+            f"| {config} | {m['accuracy']}{ci_txt} | {passk_txt} | "
+            f"{overhead_txt} | {m['tokens_per_solved'] or '—'} | "
+            f"{m['latency_p50_s']} / {m['latency_p95_s']} |"
         )
     lines.append("")
 
@@ -236,6 +355,11 @@ def report_md(summary: dict[str, Any], meta: dict[str, Any]) -> str:
         lines.append("")
         for cat, count in sorted(m["failure_breakdown"].items(), key=lambda kv: -kv[1]):
             lines.append(f"- `{cat}`: {count}")
+            if cat == "prosa_en_vez_de_tool" and m["prosa_variant_breakdown"]:
+                for v, vc in sorted(
+                    m["prosa_variant_breakdown"].items(), key=lambda kv: -kv[1]
+                ):
+                    lines.append(f"    - {v}: {vc}")
         lines.append("")
 
     return "\n".join(lines)
@@ -317,6 +441,34 @@ def run_one(
         "latency_s": latency,
         "steps": steps,
     }
+
+
+def _git_commit() -> str | None:
+    """Hash corto del commit actual (para versionar la corrida). None si falla."""
+    try:
+        out = subprocess.run(
+            ["git", "rev-parse", "--short", "HEAD"],
+            cwd=str(_REPO_ROOT), capture_output=True, text=True, timeout=5,
+        )
+        return out.stdout.strip() or None
+    except Exception:  # noqa: BLE001
+        return None
+
+
+def _env_value(key: str) -> str | None:
+    """Valor de una variable: primero el entorno, luego el `.env` del repo.
+
+    Así el meta queda poblado aunque el `.env` no esté exportado al entorno.
+    """
+    if os.environ.get(key):
+        return os.environ[key]
+    env_file = _REPO_ROOT / ".env"
+    if env_file.exists():
+        for line in env_file.read_text(encoding="utf-8").splitlines():
+            line = line.strip()
+            if line.startswith(f"{key}=") and not line.startswith("#"):
+                return line.split("=", 1)[1].strip().strip('"').strip("'") or None
+    return None
 
 
 def _iter_scenario_paths(scenarios_dir: Path, only: set[str] | None) -> list[Path]:
@@ -414,11 +566,18 @@ def main(argv: list[str] | None = None) -> int:
                         flush=True,
                     )
 
+    # Versionado (#14): sin esto, dos corridas de distintas máquinas/cuentas son
+    # indistinguibles. Grabamos modelo, cuenta/perfil, versión de prompt y commit.
     meta = {
         "timestamp": timestamp,
         "module": args.module,
         "max_iterations": args.max_iterations,
         "repeats": args.repeats,
+        "bedrock_model_id": _env_value("BEDROCK_MODEL_ID"),
+        "aws_profile": _env_value("AWS_PROFILE"),
+        "aws_region": _env_value("AWS_REGION") or _env_value("AWS_DEFAULT_REGION"),
+        "prompt_version": getattr(module, "ESCAPE_ROOM_SYSTEM_PROMPT_VERSION", None),
+        "git_commit": _git_commit(),
     }
     summary = summarize(cases, args.max_iterations)
     (out_dir / "summary.json").write_text(

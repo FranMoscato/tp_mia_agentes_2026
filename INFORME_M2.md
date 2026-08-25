@@ -6,6 +6,25 @@
 > y robustez** · [M3](INFORME_M3.md) ▸ evaluación en el juego. Índice:
 > [INFORMES.md](INFORMES.md).
 
+---
+
+## Índice
+
+1. [Resumen de la entrega](#1-resumen-de-la-entrega)
+2. [Estado conversacional (statefulness)](#2-estado-conversacional-statefulness)
+3. [Estrategia de memoria](#3-estrategia-de-memoria)
+4. [Salida estructurada (`structured_call`)](#4-salida-estructurada-structured_call)
+5. [Resiliencia (reintentos ante fallos transitorios)](#5-resiliencia-reintentos-ante-fallos-transitorios)
+6. [Errores recuperables en las herramientas](#6-errores-recuperables-en-las-herramientas)
+7. [Tracking de tokens](#7-tracking-de-tokens)
+8. [Estrategia de pruebas](#8-estrategia-de-pruebas)
+9. [Modos de fallo: dentro vs. fuera de alcance](#9-modos-de-fallo-dentro-vs-fuera-de-alcance)
+10. [Criterios de aprobación](#10-criterios-de-aprobación)
+11. [Cómo ejecutar](#11-cómo-ejecutar)
+12. [Trazabilidad contrato → implementación](#12-trazabilidad-contrato--implementación)
+
+---
+
 ## 1. Resumen de la entrega
 
 M2 amplía el agente de M1 para que sobreviva a **conversaciones largas**,

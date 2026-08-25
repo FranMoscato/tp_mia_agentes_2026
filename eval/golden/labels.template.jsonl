@@ -1,8 +1,8 @@
-{"scenario": "study-with-key", "config": "react", "repeat": 0, "exploracion_metodica": null, "nota": "1-5 segun la rubrica de eval/judge.py; completar a mano mirando la traza"}
-{"scenario": "color-locks", "config": "react", "repeat": 0, "exploracion_metodica": null, "nota": ""}
-{"scenario": "library-search", "config": "react", "repeat": 0, "exploracion_metodica": null, "nota": ""}
-{"scenario": "extreme-archive", "config": "react", "repeat": 0, "exploracion_metodica": null, "nota": ""}
-{"scenario": "apartment-keys", "config": "react", "repeat": 0, "exploracion_metodica": null, "nota": ""}
-{"scenario": "office-sequence", "config": "react", "repeat": 0, "exploracion_metodica": null, "nota": ""}
-{"scenario": "vault-combination", "config": "react", "repeat": 0, "exploracion_metodica": null, "nota": ""}
-{"scenario": "backtracking-vault", "config": "react", "repeat": 0, "exploracion_metodica": null, "nota": ""}
+{"scenario": "study-with-key", "config": "react", "repeat": 0, "verdict": {"exploracion_ordenada": null, "acciones_apoyadas": null, "sin_redundancia_evitable": null}, "nota": "true/false por criterio, mirando la traza (mismo esquema que eval/judge.py)"}
+{"scenario": "color-locks", "config": "react", "repeat": 0, "verdict": {"exploracion_ordenada": null, "acciones_apoyadas": null, "sin_redundancia_evitable": null}, "nota": ""}
+{"scenario": "library-search", "config": "react", "repeat": 0, "verdict": {"exploracion_ordenada": null, "acciones_apoyadas": null, "sin_redundancia_evitable": null}, "nota": ""}
+{"scenario": "extreme-archive", "config": "react", "repeat": 0, "verdict": {"exploracion_ordenada": null, "acciones_apoyadas": null, "sin_redundancia_evitable": null}, "nota": ""}
+{"scenario": "apartment-keys", "config": "react", "repeat": 0, "verdict": {"exploracion_ordenada": null, "acciones_apoyadas": null, "sin_redundancia_evitable": null}, "nota": ""}
+{"scenario": "office-sequence", "config": "react", "repeat": 0, "verdict": {"exploracion_ordenada": null, "acciones_apoyadas": null, "sin_redundancia_evitable": null}, "nota": ""}
+{"scenario": "vault-combination", "config": "react", "repeat": 0, "verdict": {"exploracion_ordenada": null, "acciones_apoyadas": null, "sin_redundancia_evitable": null}, "nota": ""}
+{"scenario": "backtracking-vault", "config": "react", "repeat": 0, "verdict": {"exploracion_ordenada": null, "acciones_apoyadas": null, "sin_redundancia_evitable": null}, "nota": ""}

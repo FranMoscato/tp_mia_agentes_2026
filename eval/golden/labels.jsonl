@@ -1,0 +1,8 @@
+{"scenario": "study-with-key", "config": "react", "repeat": 0, "verdict": {"exploracion_ordenada": true, "acciones_apoyadas": true, "sin_redundancia_evitable": true}}
+{"scenario": "color-locks", "config": "react", "repeat": 0, "verdict": {"exploracion_ordenada": false, "acciones_apoyadas": true, "sin_redundancia_evitable": true}}
+{"scenario": "library-search", "config": "react", "repeat": 0, "verdict": {"exploracion_ordenada": false, "acciones_apoyadas": true, "sin_redundancia_evitable": true}}
+{"scenario": "extreme-archive", "config": "react", "repeat": 0, "verdict": {"exploracion_ordenada": true, "acciones_apoyadas": true, "sin_redundancia_evitable": true}}
+{"scenario": "apartment-keys", "config": "react", "repeat": 0, "verdict": {"exploracion_ordenada": true, "acciones_apoyadas": true, "sin_redundancia_evitable": true}}
+{"scenario": "office-sequence", "config": "react", "repeat": 0, "verdict": {"exploracion_ordenada": true, "acciones_apoyadas": true, "sin_redundancia_evitable": false}}
+{"scenario": "vault-combination", "config": "react", "repeat": 0, "verdict": {"exploracion_ordenada": false, "acciones_apoyadas": true, "sin_redundancia_evitable": true}}
+{"scenario": "backtracking-vault", "config": "react", "repeat": 0, "verdict": {"exploracion_ordenada": false, "acciones_apoyadas": true, "sin_redundancia_evitable": true}}

@@ -1,8 +1,0 @@
-{"scenario": "study-with-key", "config": "react", "repeat": 0, "exploracion_metodica": 3, "nota": "BORRADOR - revisar. look->examine->take en orden (metódico), pero abandona antes de use (prosa)."}
-{"scenario": "color-locks", "config": "react", "repeat": 0, "exploracion_metodica": 2, "nota": "BORRADOR - revisar. look+take y luego prosa (inversión de rol); exploración corta."}
-{"scenario": "library-search", "config": "react", "repeat": 0, "exploracion_metodica": 1, "nota": "BORRADOR - revisar. 1 sola tool-call: casi no explora, pasa a prosa."}
-{"scenario": "extreme-archive", "config": "react", "repeat": 0, "exploracion_metodica": 2, "nota": "BORRADOR - revisar. explora poco (2 calls) y describe en vez de actuar."}
-{"scenario": "apartment-keys", "config": "react", "repeat": 0, "exploracion_metodica": 3, "nota": "BORRADOR - revisar. algo de exploración multi-sala (3 calls) pero no cierra."}
-{"scenario": "office-sequence", "config": "react", "repeat": 0, "exploracion_metodica": 3, "nota": "BORRADOR - revisar. más pasos (5), explora, no logra el goal ordenado."}
-{"scenario": "vault-combination", "config": "react", "repeat": 0, "exploracion_metodica": 1, "nota": "BORRADOR - revisar. 1 tool-call y prosa: sin método."}
-{"scenario": "backtracking-vault", "config": "react", "repeat": 0, "exploracion_metodica": 1, "nota": "BORRADOR - revisar. 1 tool-call y prosa: sin método."}

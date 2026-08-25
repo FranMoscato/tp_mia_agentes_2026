@@ -142,6 +142,36 @@ def aggregate_scores(judged: list[dict[str, Any]]) -> dict[str, Any]:
     return out
 
 
+def reference_verdict(case: dict[str, Any]) -> dict[str, bool]:
+    """Referencia **determinística** de los 3 criterios, desde la traza.
+
+    Para la meta-eval (kappa) necesitamos un baseline INDEPENDIENTE del judge-LLM
+    y no circular. En vez de etiquetar "a ojo" (otro juicio subjetivo), derivamos
+    los criterios de propiedades **objetivas** de la traza —la regla de la clase de
+    empujar el juicio a código donde se pueda—. No reemplaza a un humano; es un
+    proxy reproducible y auditable contra el cual medir si el judge es confiable.
+
+    Reglas:
+      - exploracion_ordenada: no saltó a `take/use/go` antes de observar, Y hizo
+        exploración sustantiva (al menos un `examine`, o ≥2 `look`) —un único
+        `look` y abandonar no es exploración ordenada—.
+      - acciones_apoyadas: ninguna tool-call falló (`tool_error_count == 0`); si
+        el agente hubiera inventado un ID/salida, la tool habría devuelto error.
+      - sin_redundancia_evitable: sin repeticiones consecutivas
+        (`max_consecutive_repeats <= 1`).
+    """
+    tools = [s.get("tool_name") for s in (case.get("steps") or [])]
+    idx_obs = next((i for i, t in enumerate(tools) if t in ("look", "examine")), None)
+    idx_act = next((i for i, t in enumerate(tools) if t in ("take", "use", "go")), None)
+    no_ciego = idx_act is None or (idx_obs is not None and idx_obs < idx_act)
+    sustantiva = ("examine" in tools) or (tools.count("look") >= 2)
+    return {
+        "exploracion_ordenada": bool(no_ciego and sustantiva),
+        "acciones_apoyadas": (case.get("tool_error_count") or 0) == 0,
+        "sin_redundancia_evitable": (case.get("max_consecutive_repeats") or 0) <= 1,
+    }
+
+
 def cohen_kappa(labels_a: list[Any], labels_b: list[Any]) -> float | None:
     """Kappa de Cohen entre dos series de etiquetas categóricas (meta-eval #16).
 

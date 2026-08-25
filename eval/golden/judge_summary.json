@@ -1,0 +1,14 @@
+{
+  "judge_model": "llama3.2",
+  "by_config": {
+    "react": {
+      "n": 8,
+      "avg_score": 1.0,
+      "yes_rate": {
+        "exploracion_ordenada": 0.0,
+        "acciones_apoyadas": 0.25,
+        "sin_redundancia_evitable": 0.75
+      }
+    }
+  }
+}

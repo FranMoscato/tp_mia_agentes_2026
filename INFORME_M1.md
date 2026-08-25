@@ -42,6 +42,13 @@ escape en M3: registrar verbos (`look`/`examine`/`take`/`use`/`go`) y dejar que
 el LLM los orqueste en el loop ReAct. M1 construye ese motor; el juego —y su
 evaluación— llegan en M3.
 
+Y el **eslabón débil** de ese motor se ve justo en M3: con modelos chicos, el modo
+de fallo dominante no es de razonamiento espacial sino `prosa en vez de tool_call`
+—el modelo *describe* la acción en texto en lugar de **emitir** la herramienta—,
+que es precisamente una falla del **protocolo de tool-use** que se arma en este
+milestone. M1 construye el mecanismo; M3 mide, sobre el juego, exactamente dónde se
+rompe.
+
 **Mapa de archivos (lo que implementamos vs. lo que es fijo):**
 
 | Archivo | Rol | ¿Editable? |
@@ -58,6 +65,12 @@ evaluación— llegan en M3.
 
 **Estado:** los 5 tests de conformidad de M1, los 5 escenarios propios y los 23
 tests unitarios de las herramientas pasan (**33/33 en verde**).
+
+> **Nota (conteo de tests).** Los números de este informe son los de la **entrega
+> de M1**. La suite creció después: en M2 las herramientas sumaron casos borde
+> (hoy `test_herramientas.py` tiene 26) y se agregaron los tests de M2/M3. El
+> conteo vigente del repo se ve corriendo `pytest` y está desglosado en
+> [INFORME_M2](INFORME_M2.md) §8.
 
 ---
 

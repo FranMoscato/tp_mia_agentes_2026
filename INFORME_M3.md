@@ -12,6 +12,20 @@
 > corrida en Bedrock (modelo fuerte), pendiente del lease de AWS. Las
 > conclusiones ya son estables.
 
+---
+
+## Índice
+
+- [Resumen](#resumen)
+1. [Aproximación](#1-aproximación)
+2. [Métricas](#2-métricas)
+3. [Resultados](#3-resultados)
+4. [Experimentos](#4-experimentos)
+5. [Limitaciones y próximos pasos](#5-limitaciones-y-próximos-pasos)
+- [Apéndice A — Cómo reproducir](#apéndice-a--cómo-reproducir)
+
+---
+
 ## Resumen
 
 Aplicamos nuestro framework de M1+M2 a un **mundo simulado tipo sala de
@@ -182,11 +196,13 @@ allá del éxito binario.
   que **no** lo juzga el LLM; el judge solo cubre la calidad de exploración, donde
   no hay verificación por código.
 - **Confiabilidad (meta-eval).** *"Un judge es un instrumento, no un oráculo: hay
-  que calibrarlo contra ground truth humano."* Etiquetamos a mano las trazas del
-  golden set y medimos el **kappa de Cohen** (`cohen_kappa`), que corrige el
-  acuerdo por azar —un judge que siempre dice lo mismo puede tener 95% de accuracy
-  y κ = 0—. Bandas: κ < 0.4 recalibrar, 0.4–0.6 tolerable, 0.6–0.8 trabajable. Si
-  el kappa es bajo, no usamos sus números aunque el judge ya esté construido.
+  que calibrarlo contra ground truth."* Comparamos las trazas del golden set
+  contra una **referencia determinística** (`reference_verdict`, derivada de la
+  traza) y medimos el **kappa de Cohen** (`cohen_kappa`), que corrige el acuerdo
+  por azar —un judge que siempre dice lo mismo puede tener 95% de accuracy y
+  κ = 0—. Bandas: κ < 0.4 recalibrar, 0.4–0.6 tolerable, 0.6–0.8 trabajable. Si el
+  kappa es bajo, no usamos sus números aunque el judge ya esté construido (es lo
+  que pasó: κ ≈ 0, §3.4).
 
 ### 2.3 Cómo se computan (reproducibilidad)
 
@@ -275,9 +291,11 @@ El fallo es de **disciplina de tool-calling**, no de razonamiento espacial: el
 agente entiende qué hacer pero lo **describe** en vez de emitir el `tool_call`.
 En términos del protocolo de tool use (Clase 3), **falla el "Turn 1"**: en vez de
 emitir un `toolUse` (`stopReason = tool_use`), devuelve texto
-(`stopReason = end_turn`), lo que **cierra el loop** antes de actuar. Por eso el
-gate (§4.2) no lo elimina —el gate valida un `toolUse` que acá **nunca llega**;
-solo limpia los fallos por uso inválido cuando el modelo sí actúa.
+(`stopReason = end_turn`), lo que **cierra el loop** antes de actuar. Es,
+literalmente, una falla del **mecanismo de tool-use que construimos en M1** (ver
+[INFORME_M1](INFORME_M1.md) §1): el motor está bien; el modelo chico no lo
+acciona. Por eso el gate (§4.2) no lo elimina —el gate valida un `toolUse` que acá
+**nunca llega**; solo limpia los fallos por uso inválido cuando el modelo sí actúa.
 
 **Redundancia (señal de loop).** Medimos la racha máxima de tool-calls idénticas
 por caso:
@@ -326,15 +344,36 @@ apoyadas** en lo observado (0.12–0.22), pero sí **poca redundancia** (0.61–
 `summarizer` es el único con algo más de redundancia (0.61 vs 0.79–0.83), lo que
 concuerda con que loopea más (§3.3).
 
-**Sobre la confiabilidad del judge (honesto).** El `llama3.2` pudo puntuar
+**Sobre la cobertura del judge (honesto).** El `llama3.2` pudo puntuar
 **23–24/24** de las trazas; cuando el judge fue `qwen2.5:3b` (§3.5), solo pudo
 puntuar **9–12/24**. La lectura correcta **no** es "un judge distinto cura el
 self-preference" —eso es un sesgo de *puntaje*, que no medimos—, sino que
 **`llama3.2` es un judge más confiable para *emitir* el veredicto estructurado**
-(un modelo mejor en tool-calling). El self-preference (comparar puntajes de las
-mismas trazas bajo judge propio vs ajeno) y la capacidad real (kappa contra
-etiquetas humanas) **no los testeamos**: quedan como meta-eval pendiente (§5),
-idealmente con un judge fuerte (`nova-pro`) y el golden set etiquetado.
+(un modelo mejor en tool-calling).
+
+**Meta-eval: ¿es confiable el judge? (kappa, medido).** Corrimos la meta-eval del
+enunciado sobre el golden set (8 trazas reales del piloto `nova-lite`,
+[`eval/golden/`](eval/golden/)): comparamos el veredicto del judge (`llama3.2`)
+contra una **referencia determinística** derivada de propiedades objetivas de la
+traza —orden `look`/`examine` antes de actuar, `tool_error_count`, repeticiones—
+(`reference_verdict` en [`eval/judge.py`](eval/judge.py)), con la **kappa de
+Cohen** por criterio. La referencia es código, no otro juicio subjetivo ni el
+mismo LLM: evita la circularidad. Resultado: **κ ≈ 0 en los tres criterios**
+(`exploracion_ordenada` **0.0**, `acciones_apoyadas` **0.0**,
+`sin_redundancia_evitable` **−0.2**). El judge **no acuerda con la referencia
+mejor que el azar**: satura marcando `exploracion_ordenada`=NO en las 8 trazas
+(no discrimina) y hasta reporta "acciones sin apoyo" en trazas con **cero
+tool-errors** (alucina el defecto). Es **evidencia medida** del techo de capacidad
+que sospechábamos —un judge tan débil como el agente no es confiable—, así que los
+scores de la tabla de arriba hay que tomarlos con pinzas.
+
+*Caveats del kappa.* n=8 y todas fallidas (trayectorias cortas): la referencia
+satura en algunos criterios (p. ej. `acciones_apoyadas` da SÍ en las 8 porque
+ninguna acción falló), así que parte de los κ=0 son **degenerados por falta de
+varianza**, no solo desacuerdo genuino. El self-preference (mismas trazas bajo
+judge propio vs. ajeno) **sigue sin medirse** (§5). Una calibración definitiva
+necesita un judge fuerte (`nova-pro`) y trazas con variación real (éxitos,
+trayectorias largas). Reproducible: `python eval/kappa.py eval/golden/cases.jsonl`.
 
 ### 3.5 Comparación cross-modelo / proveedor
 
@@ -500,12 +539,16 @@ estudio (los demás quedan fijos).
   **escala ordinal 1–5** —dos anti-patrones de la clase (self-preference y
   tendencia central; las notas se amontonaban en 3)—. Los **corregimos**: judge
   **distinto** del agente (`llama3.2` juzga a `qwen`) y **checklist binario** (§2.2,
-  §3.4). *Lo que queda* como limitación honesta: (a) **capacidad del judge** — con
-  modelos locales chicos el judge no es *más capaz* que el agente, solo distinto;
-  lo correcto es un judge fuerte (`nova-pro` juzgando a `nova-lite`); (b) **no
-  medimos self-preference** (requiere comparar puntajes de las mismas trazas bajo
-  judge propio vs ajeno) **ni la kappa** contra etiquetas humanas del golden set.
-  Sin esa calibración, los puntajes del judge son indicativos, no confiables.
+  §3.4). Además **corrimos la meta-eval (kappa)** contra una referencia
+  determinística: **κ ≈ 0** en los tres criterios (§3.4) — evidencia *medida* de
+  que el judge chico no es confiable. *Lo que queda* como limitación honesta:
+  (a) **capacidad del judge** — con modelos locales chicos el judge no es *más
+  capaz* que el agente, solo distinto; lo correcto es un judge fuerte (`nova-pro`
+  juzgando a `nova-lite`); (b) el **kappa medido es frágil**: con 8 trazas fallidas
+  la referencia satura y parte de los κ=0 son degenerados por falta de varianza —una
+  kappa definitiva necesita trazas con variación real; (c) **no medimos
+  self-preference** (requiere comparar puntajes de las mismas trazas bajo judge
+  propio vs ajeno). Con un judge chico, sus puntajes son indicativos, no confiables.
 - **Escala del dataset.** 8 escenarios: los intervalos de confianza son anchos.
   pass^k y Wilson lo hacen explícito, pero no lo eliminan.
 - **`max_iterations = 30` es del harness**, no del enunciado: lo subimos para que
@@ -527,10 +570,12 @@ estudio (los demás quedan fijos).
    separar de forma limpia los límites del framework de los del modelo y ver si
    los efectos medidos (costo del resumen, limpieza del gate) persisten cuando la
    accuracy deja de ser 0.
-5. **Calibrar el judge.** Ya lo hicimos **distinto** del agente y con **checklist
-   binario**; falta lo más costoso: un judge **más capaz** (`nova-pro` en Bedrock)
-   para subir el techo del eval, y **etiquetar el golden set a mano** para medir la
-   **kappa** (y recién ahí confiar en sus puntajes).
+5. **Calibrar el judge.** Ya lo hicimos **distinto** del agente, con **checklist
+   binario**, y **medimos la kappa** contra una referencia determinística (κ ≈ 0:
+   el judge chico no es confiable, §3.4). Falta lo más costoso: un judge **más
+   capaz** (`nova-pro` en Bedrock) y **trazas con variación real** (éxitos,
+   trayectorias largas) para que la kappa deje de ser degenerada y recién ahí
+   confiar en sus puntajes.
 6. **Memoria más allá de la de trabajo (CoALA).** Hoy el agente usa solo
    **memoria de trabajo** (la ventana). Sumar memoria **episódica** (aprender
    entre escenarios: "en la sala anterior la llave estaba bajo la alfombra") o
@@ -550,8 +595,12 @@ OLLAMA_HOST=http://localhost:11434 OLLAMA_MODEL=qwen2.5:3b \
 # --- Con Bedrock (modelo fuerte; requiere lease + nova-lite habilitado) ---
 python eval/run.py --repeats 3          # toma el provider del .env
 
-# Dimensión cualitativa (LLM-as-judge) sobre una corrida
-python eval/judge.py eval/results/<timestamp>/cases.jsonl
+# Dimensión cualitativa (LLM-as-judge) sobre una corrida (judge DISTINTO del agente)
+python eval/judge.py eval/results/<timestamp>/cases.jsonl --judge-model llama3.2
+
+# Meta-eval del judge: kappa de Cohen vs. referencia determinística (sobre el golden)
+python eval/judge.py eval/golden/cases.jsonl --judge-model llama3.2
+python eval/kappa.py  eval/golden/cases.jsonl
 
 # Gráficos de UNA corrida
 python scripts/generar_graficos_m3.py

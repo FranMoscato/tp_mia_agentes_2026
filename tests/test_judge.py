@@ -72,6 +72,40 @@ def test_aggregate_scores_ignora_veredictos_none() -> None:
     assert judge.aggregate_scores(judged)["react"]["avg_score"] == 3.0
 
 
+# --- reference_verdict (baseline determinístico para la kappa) -------------
+
+
+def _case(tools, *, errs=0, maxrep=1):
+    return {
+        "tool_error_count": errs, "max_consecutive_repeats": maxrep,
+        "steps": [{"tool_name": t} for t in tools],
+    }
+
+
+def test_reference_verdict_exploracion_ordenada_sustantiva() -> None:
+    # look -> examine -> take: observó y exploró (examine) antes de actuar.
+    v = judge.reference_verdict(_case(["look", "examine", "take"]))
+    assert v["exploracion_ordenada"] is True
+    assert v["acciones_apoyadas"] is True
+    assert v["sin_redundancia_evitable"] is True
+
+
+def test_reference_verdict_un_solo_look_no_es_ordenada() -> None:
+    # Un único look y abandonar no es exploración sustantiva.
+    assert judge.reference_verdict(_case(["look"]))["exploracion_ordenada"] is False
+
+
+def test_reference_verdict_take_sin_examine_no_es_ordenada() -> None:
+    # look -> take sin examine ni un segundo look: salto a la acción.
+    assert judge.reference_verdict(_case(["look", "take"]))["exploracion_ordenada"] is False
+
+
+def test_reference_verdict_errores_y_redundancia() -> None:
+    v = judge.reference_verdict(_case(["look", "examine", "take"], errs=2, maxrep=3))
+    assert v["acciones_apoyadas"] is False       # hubo tool-errors
+    assert v["sin_redundancia_evitable"] is False  # repeticiones consecutivas
+
+
 # --- cohen_kappa (meta-eval #16) -------------------------------------------
 
 

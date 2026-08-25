@@ -66,6 +66,8 @@ DEFAULT_RESULTS_DIR = _REPO_ROOT / "eval" / "results"
 # El experimento #1 de M3 (resumen on/off) sale de comparar "react" vs
 # "summarizer". Agregá acá otras variantes (ventana, max_iterations, etc.).
 CONFIGS: dict[str, dict[str, Any]] = {
+    # BASELINE: el loop ReAct puro (prompt `escape-v1`, sin resumen ni gate). Es
+    # el punto de comparación de los tres experimentos (el "OFF" de cada uno).
     "react": {"use_summarizer": False},
     "summarizer": {"use_summarizer": True},
     # Experimento #2 (gate on/off): "react" es el gate OFF; "gate" activa el

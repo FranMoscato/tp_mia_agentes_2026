@@ -448,9 +448,41 @@ sus escenarios. No ejecutan un LLM real.
 pytest tests/conformance/test_m3_world.py
 ```
 
-El M3 completo también requiere su propia infraestructura de evaluación
-para correr el agente, capturar resultados, analizar errores y comparar
-ablaciones. Ese entregable está descrito en [`ENUNCIADO_M3.md`](../ENUNCIADO_M3.md).
+#### Infraestructura de evaluación (`eval/`)
+
+El entregable de evaluación de M3 (descrito en
+[`ENUNCIADO_M3.md`](../ENUNCIADO_M3.md)) está implementado en `eval/`:
+
+```bash
+# Corre el agente sobre los 8 escenarios, en todos los brazos de experimento,
+# repitiendo cada caso 3 veces. Requiere un proveedor LLM configurado.
+python eval/run.py --repeats 3
+
+# Subconjuntos y un solo experimento:
+python eval/run.py --scenarios study-with-key,color-locks --configs react
+```
+
+- **`eval/run.py`** — harness reproducible. Captura por caso la traza, el goal
+  (verificado por código con `check_goal`), tool-calls vs. óptimo, tokens
+  (agente vs. resumen), latencia y errores. Escribe `cases.jsonl` +
+  `summary.json` + `summary.md` en `eval/results/<timestamp>/`.
+  - **Métricas:** accuracy con IC de Wilson, **pass^k**, overhead vs. óptimo,
+    **costo por caso resuelto**, latencia **p50/p95**.
+  - **Modos de fallo:** categorizados (incl. `prosa_en_vez_de_tool`, el modo
+    dominante, con sus variantes).
+  - **Experimentos (`--configs`):** `react` (ReAct puro), `summarizer`
+    (resumen de estado on), `gate` (gate determinístico on). El óptimo por
+    escenario se **deriva por búsqueda** en `eval/optimal.py` (no se hardcodea).
+- **`eval/judge.py`** — dimensión cualitativa (LLM-as-judge) sobre la calidad
+  de la trayectoria; incluye la meta-eval con kappa.
+  ```bash
+  python eval/judge.py eval/results/<timestamp>/cases.jsonl
+  ```
+- **`eval/golden/`** — golden set versionado (8 trazas reales) + split
+  dev/holdout y flujo de etiquetado. Ver `eval/golden/README.md`.
+
+Las funciones de métricas, categorización, búsqueda del óptimo y del judge
+están testeadas sin LLM en `tests/test_eval_harness.py` y `tests/test_judge.py`.
 
 ### Nota sobre contexto con Ollama
 

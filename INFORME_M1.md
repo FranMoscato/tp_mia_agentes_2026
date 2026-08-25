@@ -312,9 +312,15 @@ exitosa": un string de error que la herramienta *devuelve* es contenido válido,
 no un fallo de ejecución. (Una versión previa usaba `startswith("Error:")` como
 heurística; se descartó por frágil.)
 
-**D9 — System prompt en español, conservador.** El prompt instruye usar
-herramientas solo cuando sean necesarias y responder en español. No fuerza el uso
-de herramientas para no romper el caso "saludo → respuesta directa sin tools".
+**D9 — System prompt por defecto genérico e inyectable.** El default de
+`MyAgent` (`SYSTEM_PROMPT` en `agent.py`) es un prompt **genérico**: un asistente
+que usa herramientas solo cuando hacen falta y no inventa resultados. No fuerza el
+uso de herramientas, para no romper el caso "saludo → respuesta directa sin tools".
+El prompt **no** está cableado: `build_agent` acepta `system_prompt` por config, de
+modo que cada milestone pueda especializarlo sin tocar el agente. En M3, el runner
+de la sala de escape inyecta `ESCAPE_ROOM_SYSTEM_PROMPT` por esa vía (ver el informe
+de M3); el default sigue siendo el genérico, así una corrida de M1/M2 nunca arranca
+"creyéndose" en una sala de escape.
 
 **D10 — Una herramienta por archivo.** Sigue la convención del scaffold y
 mantiene cada tool con su `ToolSchema.from_callable` al lado, fácil de registrar

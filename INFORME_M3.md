@@ -55,6 +55,21 @@ las herramientas del mundo y dejando operar el bucle ReAct de M1 (sense → deci
   multi-sala (`apartment-keys`, `office-sequence`) la ejercitan: hay que
   **navegar, recordar el mapa y volver**.
 
+**Arquitectura en una imagen.** El sistema son tres capas —entorno, agente y
+evaluación— y la distinción *agente vs. workflow* se ve al colorearlas: el único
+componente **autónomo** (donde la LLM decide en runtime) es el núcleo del loop
+ReAct; todo lo que lo rodea es **workflow determinístico** (código de 0 tokens:
+gate, ventana de memoria, harness, BFS) o **workflow con LLM en paso fijo**
+(summarizer y judge: llaman al LLM, pero corren siempre igual, no deciden el
+control-flow).
+
+![Arquitectura de la solución: entorno, agente y evaluación](docs/m3_arquitectura.png)
+
+El corazón del agente es el loop ReAct. Visto de cerca, un solo paso del ciclo es
+autónomo (la LLM elige la tool); los otros tres son control-flow fijo:
+
+![El loop ReAct por dentro: qué decide el LLM vs. qué es control-flow fijo](docs/m3_loop_react.png)
+
 ### 1.2 Especializaciones para M3
 
 Lo mínimo, y todo **detrás de config/flags** para no contaminar M1/M2:

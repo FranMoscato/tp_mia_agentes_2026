@@ -410,6 +410,7 @@ class MyAgent:
         max_retries: int = 3,
         retry_backoff_base: float = 0.5,
         use_summarizer: bool = False,
+        tool_gate: Callable[[str, dict[str, Any]], str | None] | None = None,
     ) -> None:
         """Inicializa el agente.
 
@@ -452,6 +453,11 @@ class MyAgent:
         self._tools={}
         self._schemas={}
         self.messages: list[dict[str, Any]] = []
+
+        # Gate determinístico opcional (M3): valida una tool-call ANTES de
+        # ejecutarla y la bloquea con un error accionable si viola una regla
+        # (ver `_ejecutar_tool`). Off por default: el runner de M3 lo inyecta.
+        self._tool_gate = tool_gate
 
         # Summarizer de estado (M3): apagado por defecto. Cuando está activo,
         # anexamos el addendum al system prompt para que el agente sepa leer el
@@ -833,6 +839,16 @@ class MyAgent:
             args = json.loads(call.arguments) if call.arguments else {}
         except json.JSONDecodeError as exc:
             return None, f"Argumentos JSON inválidos para '{call.name}': {exc}."
+
+        # 2.5) Gate determinístico opcional (M3, detrás de flag): un `if`
+        #      garantiza lo que ningún prompt puede (no usar un item que no
+        #      tomaste, no inventar IDs). Bloquea ANTES de ejecutar y devuelve
+        #      el bloqueo como error accionable (una observación más), sin
+        #      romper el bucle. Off por default -> M1/M2 no se ven afectados.
+        if self._tool_gate is not None:
+            bloqueo = self._tool_gate(call.name, args)
+            if bloqueo is not None:
+                return None, bloqueo
 
         # 3) Ejecución del callable, con reintentos ante fallos transitorios
         #    (p. ej. una tool que hace red y sufre un timeout). Cualquier

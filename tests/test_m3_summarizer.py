@@ -48,6 +48,39 @@ def test_system_prompt_de_escape_se_inyecta_por_config() -> None:
     assert "sala de escape" in agent._system
 
 
+def test_tool_gate_bloquea_antes_de_ejecutar() -> None:
+    """El gate (M3) bloquea una tool-call y devuelve el bloqueo como error,
+    sin ejecutar el callable ni romper el bucle."""
+    ejecutada = {"n": 0}
+
+    def _peligrosa() -> str:
+        ejecutada["n"] += 1
+        return "efecto"
+
+    schema = ToolSchema(
+        name="peligrosa", description="no debería ejecutarse",
+        parameters={"type": "object", "properties": {}, "required": []},
+    )
+    gate = lambda name, args: "BLOQUEADO por el gate" if name == "peligrosa" else None
+
+    mock = MockLLMClient(
+        [
+            LLMResponse(content=None, tool_calls=[
+                ToolCall(id="c1", name="peligrosa", arguments=json.dumps({}))]),
+            LLMResponse(content="listo"),
+        ]
+    )
+    agent = build_agent({"llm_client": mock, "tool_gate": gate, **_SIN_BACKOFF})
+    agent.register_tool(_peligrosa, schema)
+
+    result = agent.run("usá la tool")
+
+    assert ejecutada["n"] == 0, "el gate debe impedir que el callable se ejecute"
+    assert result.steps[0].tool_output is None
+    assert result.steps[0].error == "BLOQUEADO por el gate"
+    assert result.answer == "listo"  # el bucle sigue y termina normal
+
+
 def _tool_mirar():
     """Una tool determinista para disparar un turno de herramientas."""
     schema = ToolSchema(

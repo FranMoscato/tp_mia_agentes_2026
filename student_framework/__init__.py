@@ -60,6 +60,11 @@ def build_agent(config: dict[str, Any] | None = None) -> Agent:
     if "system_prompt" in config:
         kwargs["system_prompt"] = config["system_prompt"]
 
+    # Gate determinístico (M3, experimento gate on/off): callable inyectable
+    # que valida cada tool-call antes de ejecutarla. Off por default.
+    if "tool_gate" in config:
+        kwargs["tool_gate"] = config["tool_gate"]
+
     agent = MyAgent(**kwargs)
 
     # Registro de las tres herramientas obligatorias del M1. Cada una se

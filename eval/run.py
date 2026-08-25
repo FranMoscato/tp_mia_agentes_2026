@@ -67,6 +67,10 @@ DEFAULT_RESULTS_DIR = _REPO_ROOT / "eval" / "results"
 CONFIGS: dict[str, dict[str, Any]] = {
     "react": {"use_summarizer": False},
     "summarizer": {"use_summarizer": True},
+    # Experimento #2 (gate on/off): "react" es el gate OFF; "gate" activa el
+    # gate determinístico. `use_gate` lo consume run_one (construye el gate
+    # cerrado sobre el world del escenario), no build_agent.
+    "gate": {"use_summarizer": False, "use_gate": True},
 }
 
 # Tope de iteraciones para el eval. El default del agente (20) no alcanza para
@@ -370,6 +374,36 @@ def report_md(summary: dict[str, Any], meta: dict[str, Any]) -> str:
 # ---------------------------------------------------------------------------
 
 
+def build_escape_gate(world: Any) -> Any:
+    """Gate determinístico de la sala de escape (experimento #2).
+
+    Garantiza con un `if` lo que el prompt no puede: (1) no inventar IDs —un
+    argumento `item`/`target` debe ser un id que exista en el mundo—, y (2) no
+    usar un objeto que no está en el inventario. Devuelve un error accionable
+    (que el agente ve como observación) o None si la acción está permitida.
+    """
+    def gate(tool_name: str, args: dict[str, Any]) -> str | None:
+        # (1) No inventar IDs: los parámetros que refieren objetos deben existir.
+        for param in ("item", "target"):
+            val = args.get(param)
+            if val is not None and val not in world.items:
+                return (
+                    f"Error: no existe ningún objeto con id '{val}'. Usá "
+                    f"exactamente un id que haya aparecido en un resultado previo."
+                )
+        # (2) No usar un objeto que no tomaste.
+        if tool_name == "use":
+            item = args.get("item")
+            if item is not None and item not in world.inventory:
+                return (
+                    f"Error: no tenés '{item}' en el inventario. Primero tenés "
+                    f"que tomarlo con take."
+                )
+        return None
+
+    return gate
+
+
 def run_one(
     scenario_path: Path,
     config_name: str,
@@ -393,6 +427,11 @@ def run_one(
         "max_iterations": max_iterations,
         **config,
     }
+    # Gate determinístico (experimento #2): si el config lo pide, lo construimos
+    # cerrado sobre el world de ESTE escenario y lo pasamos como callable.
+    if build_config.pop("use_gate", False):
+        build_config["tool_gate"] = build_escape_gate(world)
+
     # Inyectamos el system prompt de la sala de escape (el default del agente es
     # genérico). Si el módulo no lo expone, el config no lo fuerza.
     escape_prompt = getattr(module, "ESCAPE_ROOM_SYSTEM_PROMPT", None)

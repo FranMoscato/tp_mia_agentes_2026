@@ -210,6 +210,39 @@ def test_summarize_desglosa_variantes_de_prosa() -> None:
     assert vb.get("intencion_anunciada") == 1
 
 
+# --- gate determinístico (experimento #2) ----------------------------------
+
+
+class _FakeWorld:
+    def __init__(self, item_ids, inventory):
+        self.items = {i: object() for i in item_ids}
+        self.inventory = list(inventory)
+
+
+def test_gate_bloquea_id_inventado() -> None:
+    gate = eval_run.build_escape_gate(_FakeWorld(["llave", "puerta"], []))
+    msg = gate("examine", {"target": "fantasma"})
+    assert msg is not None and "no existe" in msg
+
+
+def test_gate_bloquea_use_de_item_no_tomado() -> None:
+    gate = eval_run.build_escape_gate(_FakeWorld(["llave", "puerta"], []))
+    msg = gate("use", {"item": "llave", "target": "puerta"})
+    assert msg is not None and "inventario" in msg
+
+
+def test_gate_permite_use_de_item_en_inventario() -> None:
+    gate = eval_run.build_escape_gate(_FakeWorld(["llave", "puerta"], ["llave"]))
+    assert gate("use", {"item": "llave", "target": "puerta"}) is None
+
+
+def test_gate_no_toca_go_ni_ids_validos() -> None:
+    gate = eval_run.build_escape_gate(_FakeWorld(["llave", "puerta"], []))
+    assert gate("go", {"direction": "norte"}) is None
+    assert gate("examine", {"target": "puerta"}) is None
+    assert gate("take", {"item": "llave"}) is None
+
+
 # --- report_md -------------------------------------------------------------
 
 

@@ -13,6 +13,15 @@ agrega la pieza que el juego va a exigir, y el último lo pone a jugar y lo mide
 | [**INFORME_M2**](INFORME_M2.md) | Memoria, prompting y robustez | La **memoria** (sliding window + goal), la **salida estructurada** y la **resiliencia**. Es justo lo que el escape room necesita: un mundo *estado-full*, salidas malformadas de modelos chicos y trayectorias largas. |
 | [**INFORME_M3**](INFORME_M3.md) | Evaluación sobre salas de escape | Pone el agente **dentro del juego** y lo **evalúa** (accuracy + IC, pass^k, overhead vs. óptimo por BFS, latencia, costo, LLM-as-judge). |
 
+## Estado y próximo paso
+
+La serie está completa y los tres informes son estables. El **próximo paso del
+trabajo** es uno y ya está **todo cableado**: correr el eval de M3 en **Bedrock**
+(`nova-lite` como agente, `nova-pro` como judge), pendiente solo del lease de AWS.
+Con un modelo que sí llama herramientas, la accuracy deja de ser 0 y se encienden
+las métricas hoy degeneradas (pass^k, overhead-vs-óptimo, tokens/USD por éxito) y
+la kappa del judge deja de ser degenerada. Detalle en [INFORME_M3](INFORME_M3.md) §5.
+
 ## Diseño compartido
 
 Los tres informes se leen como una serie: los diagramas comparten una **paleta

@@ -10,7 +10,8 @@
 > una corrida local (`ollama` / `qwen2.5:3b`, 8 escenarios × 3 configs × **3
 > repeats** = 72 casos). Marcamos con `†` los números que se refrescan con la
 > corrida en Bedrock (modelo fuerte), pendiente del lease de AWS. Las
-> conclusiones ya son estables.
+> conclusiones ya son estables. **El próximo paso del trabajo es esa corrida en
+> Bedrock** (§5): desbloquea las métricas hoy degeneradas y la kappa del judge.
 
 ---
 
@@ -556,6 +557,17 @@ estudio (los demás quedan fijos).
 
 **Qué construiríamos a continuación.**
 
+> **➡️ Próximo paso inmediato (desbloquea a casi todos los demás): correr el eval
+> completo en Bedrock.** Es lo único que falta y ya está **todo cableado**
+> (`eval/run.py` toma el provider del `.env`; ver Apéndice A): solo depende del
+> **lease de AWS**. Con `nova-lite` como agente —un modelo que **sí** llama
+> herramientas— la accuracy deja de ser 0 y **se encienden las métricas hoy
+> degeneradas** (pass^k, overhead-vs-óptimo sobre resueltos, tokens/USD por éxito);
+> con `nova-pro` como judge y trazas con variación, la **kappa deja de ser
+> degenerada** (§3.4). Recién ahí se separa limpio *framework* de *modelo* y se
+> puede confiar en los puntajes del judge. Los pasos 1–4 de abajo se miden mejor
+> una vez hecho esto.
+
 1. **Gate más rico** (si el Experimento 2 lo respalda): extender las garantías
    determinísticas a más precondiciones del mundo, y medir hasta dónde el gate
    sustituye prompt.
@@ -564,19 +576,13 @@ estudio (los demás quedan fijos).
    política.
 3. **Planner explícito vs. ReAct** en `office-sequence` (goal compuesto/ordenado):
    el escenario premia descomponer y planificar el orden de sub-objetivos.
-4. **Más modelos y un modelo fuerte.** Ya corrimos con `--repeats 3` y con dos
-   modelos locales (`qwen2.5:3b`, `llama3.2`); el paso que falta es un modelo
-   capaz (`nova-lite`/`nova-pro` en Bedrock) que **sí** llame herramientas, para
-   separar de forma limpia los límites del framework de los del modelo y ver si
-   los efectos medidos (costo del resumen, limpieza del gate) persisten cuando la
-   accuracy deja de ser 0.
-5. **Calibrar el judge.** Ya lo hicimos **distinto** del agente, con **checklist
-   binario**, y **medimos la kappa** contra una referencia determinística (κ ≈ 0:
-   el judge chico no es confiable, §3.4). Falta lo más costoso: un judge **más
-   capaz** (`nova-pro` en Bedrock) y **trazas con variación real** (éxitos,
-   trayectorias largas) para que la kappa deje de ser degenerada y recién ahí
-   confiar en sus puntajes.
-6. **Memoria más allá de la de trabajo (CoALA).** Hoy el agente usa solo
+4. **Calibrar el judge (una vez corrido Bedrock).** Ya lo hicimos **distinto** del
+   agente, con **checklist binario**, y **medimos la kappa** contra una referencia
+   determinística (κ ≈ 0: el judge chico no es confiable, §3.4). Lo que falta
+   depende del próximo paso: un judge **más capaz** (`nova-pro`) y **trazas con
+   variación real** (éxitos, trayectorias largas) para que la kappa deje de ser
+   degenerada y recién ahí confiar en sus puntajes.
+5. **Memoria más allá de la de trabajo (CoALA).** Hoy el agente usa solo
    **memoria de trabajo** (la ventana). Sumar memoria **episódica** (aprender
    entre escenarios: "en la sala anterior la llave estaba bajo la alfombra") o
    **semántica** (hechos persistentes del mundo) permitiría transferir

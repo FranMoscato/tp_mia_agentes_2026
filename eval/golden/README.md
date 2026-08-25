@@ -26,7 +26,10 @@ antes de decidir, para no sobreajustar prompt/gate a escenarios concretos.
 ## Meta-eval del judge (kappa, #16)
 
 1. Etiquetá a mano cada traza con `exploracion_metodica` (1-5) según la rúbrica
-   de `eval/judge.py`. Copiá `labels.template.jsonl` a `labels.jsonl` y completá.
+   de `eval/judge.py`. Hay un **borrador** en `labels.draft.jsonl` (basado en las
+   trazas del piloto) para acelerar: **revisalo a mano** y, cuando estés de
+   acuerdo, guardalo como `labels.jsonl` (el baseline humano debe ser genuino).
+   La plantilla vacía está en `labels.template.jsonl`.
 2. Corré el judge sobre `cases.jsonl` para obtener sus puntajes.
 3. Compará con `cohen_kappa(judge, humano)` (en `eval/judge.py`): un kappa alto
    indica que el judge es confiable; uno bajo, que la rúbrica o el prompt del

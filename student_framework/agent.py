@@ -452,6 +452,12 @@ class MyAgent:
         self.memory_input_tokens = 0
         self.memory_output_tokens = 0
 
+        # Llamadas al LLM del último `run()`. El tope de `max_iterations` se
+        # cuenta en LLAMADAS, no en tool-calls (un `assistant` puede pedir
+        # varias tools de una). El eval lo lee para distinguir "agotó el
+        # presupuesto de iteraciones" de "se rindió antes".
+        self.llm_calls = 0
+
     def register_tool(
         self,
         tool: Callable[..., str],
@@ -502,6 +508,7 @@ class MyAgent:
         # Costo del summarizer de ESTA corrida (ver __init__): arranca en 0.
         self.memory_input_tokens = 0
         self.memory_output_tokens = 0
+        self.llm_calls = 0
 
         # Esquemas de las herramientas a exponer al LLM
         tools = list(self._schemas.values()) if self._schemas else None
@@ -515,6 +522,7 @@ class MyAgent:
 
         # Contamos las llamadas ya realizadas al LLM. El tope total es `self._max_iterations`.
         llamadas = 1
+        self.llm_calls = llamadas
 
         # iteramos mientras HAYA tool_calls (y no superemos el tope).
         while response.tool_calls and llamadas < self._max_iterations:
@@ -571,6 +579,7 @@ class MyAgent:
             response = self._chat_con_reintentos(tools)
             self._acumular_tokens(resultado, response)
             llamadas += 1
+            self.llm_calls = llamadas
 
         # Guardamos en el historial la última respuesta del LLM. Solo
         # incluimos `tool_calls` si realmente los hay (si el bucle terminó
@@ -593,18 +602,11 @@ class MyAgent:
         """Llama a `chat` con la ventana de historial y reintentos."""
         ventana = self._windowed_messages()
 
-        # Summarizer (M3): anteponemos el estado estructurado de la partida
-        # como contexto. Solo cuando el flag está activo; en el modo ReAct puro
-        # la ventana viaja intacta (M1/M2 no se ven afectados).
+        # Summarizer (M3): inyectamos el estado estructurado de la partida.
+        # Solo cuando el flag está activo; en el modo ReAct puro la ventana
+        # viaja intacta (M1/M2 no se ven afectados).
         if self._use_summarizer:
-            state_message = {
-                "role": "user",
-                "content": (
-                    "ESTADO ACTUAL DE LA PARTIDA:\n"
-                    f"{self._state.model_dump_json(indent=2)}"
-                ),
-            }
-            ventana = [state_message] + ventana
+            ventana = self._con_estado_inyectado(ventana)
 
         return self._con_reintentos(
             lambda: self._llm.chat(
@@ -652,6 +654,13 @@ class MyAgent:
         if not user_idxs:
             return list(msgs[total - n:])
 
+        # Tarea de un solo turno (el caso de M3: un `run()` por escenario, sin
+        # más mensajes de usuario). No hay turnos posteriores donde cortar, así
+        # que la ventana desliza sobre los bloques de acción. Ver
+        # `_ventana_de_un_solo_turno`.
+        if len(user_idxs) == 1:
+            return self._ventana_de_un_solo_turno(msgs, n, user_idxs[0])
+
         # Turno inicial COMPLETO (el goal): del primer `user` al segundo
         # `user` (exclusivo) — la tarea con su respuesta del asistente.
         fin_primer_turno = user_idxs[1] if len(user_idxs) > 1 else total
@@ -678,6 +687,93 @@ class MyAgent:
         if not ventana:
             ventana = [msgs[user_idxs[-1]]]
         return ventana
+
+    def _con_estado_inyectado(
+        self, ventana: list[dict[str, Any]]
+    ) -> list[dict[str, Any]]:
+        """Añade el `GameState` al final de la ventana, sin romper invariantes.
+
+        El estado se **anexa al contenido del último mensaje** en lugar de ir
+        como un mensaje aparte. Tres razones:
+
+        1. *Alternancia de roles.* La ventana ya empieza en `user` y termina en
+           `tool` (que Bedrock Converse normaliza a `user`). Meter un `user`
+           extra —al principio o al final— deja dos `user` consecutivos y la
+           API los rechaza.
+        2. *Presupuesto.* No agrega un mensaje, así que se sigue cumpliendo
+           `len(ventana) <= max_history_messages`.
+        3. *Posición.* El estado queda al final, que es la zona mejor atendida
+           (lost in the middle) y no invalida el prefijo cacheable del prompt
+           —cosa que sí hacía al ir en la posición 0, donde cambiaba en cada
+           turno.
+
+        No mutamos el historial: copiamos el último mensaje antes de tocarlo.
+        Si el estado todavía está vacío (primera llamada) no inyectamos nada:
+        sería ruido y tokens pagados por un JSON de campos vacíos.
+        """
+        if not ventana or self._state == GameState():
+            return ventana
+
+        bloque = (
+            "ESTADO ACTUAL DE LA PARTIDA:\n"
+            f"{self._state.model_dump_json(indent=2)}"
+        )
+        ultimo = dict(ventana[-1])
+        contenido = ultimo.get("content") or ""
+        ultimo["content"] = f"{contenido}\n\n{bloque}" if contenido else bloque
+        return ventana[:-1] + [ultimo]
+
+    @staticmethod
+    def _bloques_de_accion(msgs: list[dict[str, Any]]) -> list[list[dict[str, Any]]]:
+        """Agrupa el historial en bloques atómicos que no se pueden partir.
+
+        Un bloque es un mensaje `assistant` junto con los mensajes `tool` que
+        responden a sus `tool_calls`. Recortar por el medio de un bloque
+        dejaría `tool_calls` sin respuesta (o `tool` huérfanos), que es
+        justo lo que los proveedores rechazan.
+        """
+        bloques: list[list[dict[str, Any]]] = []
+        for m in msgs:
+            if m.get("role") == "tool" and bloques:
+                bloques[-1].append(m)
+            else:
+                bloques.append([m])
+        return bloques
+
+    def _ventana_de_un_solo_turno(
+        self, msgs: list[dict[str, Any]], n: int, inicio: int
+    ) -> list[dict[str, Any]]:
+        """Ventana para una tarea con un único mensaje `user` (el caso de M3).
+
+        En M3 el agente resuelve el escenario en un solo `run()`: hay un único
+        mensaje de usuario (el goal) y después solo bloques
+        `assistant(tool_calls)` + sus `tool`. La estrategia por turnos no tiene
+        dónde cortar, así que deslizamos sobre los bloques de acción:
+
+          - Ancla: el goal, siempre (es el objetivo; sin él el agente no sabe
+            qué está haciendo).
+          - Cola: los bloques de acción más recientes que entren en el
+            presupuesto restante, sin partir ninguno.
+
+        El resultado alterna correctamente una vez normalizado (`user`, y
+        después pares `assistant` / `tool`), así que sirve tanto para Bedrock
+        Converse como para Ollama.
+
+        Caso degenerado: si un único bloque ya no entra en el presupuesto
+        (un `assistant` con más `tool_calls` que `max_history_messages`),
+        devolvemos solo el goal. Con los valores por defecto no ocurre.
+        """
+        goal = msgs[inicio]
+        bloques = self._bloques_de_accion(msgs[inicio + 1:])
+
+        espacio = n - 1
+        cola: list[dict[str, Any]] = []
+        for bloque in reversed(bloques):
+            if len(bloque) + len(cola) > espacio:
+                break
+            cola = bloque + cola
+
+        return [goal] + cola
 
     def _con_reintentos(self, fn: Callable[[], Any]) -> Any:
         """Ejecuta `fn` reintentando solo ante fallos transitorios.

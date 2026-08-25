@@ -226,8 +226,11 @@ def test_summarize_costo_varianza_redundancia() -> None:
     cases = [
         _case(config="react", scenario="s1", goal_achieved=True, repeat=0,
               agent_input_tokens=1_000_000, agent_output_tokens=0,
+              memory_input_tokens=0, memory_output_tokens=0,
               max_consecutive_repeats=1),
         _case(config="react", scenario="s1", goal_achieved=False, repeat=1,
+              agent_input_tokens=0, agent_output_tokens=0,
+              memory_input_tokens=0, memory_output_tokens=0,
               max_consecutive_repeats=3),
     ]
     m = eval_run.summarize(cases, 30, model="amazon.nova-lite-v1:0")["by_config"]["react"]

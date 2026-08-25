@@ -1,0 +1,29 @@
+{
+  "gate": {
+    "n": 5,
+    "avg_exploracion": 3.0,
+    "distribucion": {
+      "2": 2,
+      "3": 1,
+      "4": 2
+    }
+  },
+  "react": {
+    "n": 5,
+    "avg_exploracion": 3.4,
+    "distribucion": {
+      "2": 1,
+      "3": 1,
+      "4": 3
+    }
+  },
+  "summarizer": {
+    "n": 5,
+    "avg_exploracion": 3.0,
+    "distribucion": {
+      "2": 1,
+      "3": 3,
+      "4": 1
+    }
+  }
+}

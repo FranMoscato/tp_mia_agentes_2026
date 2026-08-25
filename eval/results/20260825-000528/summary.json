@@ -1,0 +1,33 @@
+{
+  "meta": {
+    "timestamp": "20260825-000528",
+    "module": "student_framework",
+    "max_iterations": 30,
+    "repeats": 1
+  },
+  "summary": {
+    "n_cases": 1,
+    "by_config": {
+      "react": {
+        "n": 1,
+        "solved": 0,
+        "accuracy": 0.0,
+        "avg_calls_overhead_vs_optimal": null,
+        "avg_tool_calls": 3.0,
+        "avg_latency_s": 14.83,
+        "avg_agent_tokens": 10317.0,
+        "avg_memory_tokens": 0.0,
+        "failure_breakdown": {
+          "wrong_path": 1
+        },
+        "by_difficulty": {
+          "easy": {
+            "n": 1,
+            "solved": 0,
+            "accuracy": 0.0
+          }
+        }
+      }
+    }
+  }
+}

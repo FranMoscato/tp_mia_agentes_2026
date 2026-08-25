@@ -1,0 +1,34 @@
+{
+  "judge_model": "llama3.2",
+  "by_config": {
+    "gate": {
+      "n": 24,
+      "avg_score": 1.0,
+      "yes_rate": {
+        "exploracion_ordenada": 0.08,
+        "acciones_apoyadas": 0.12,
+        "sin_redundancia_evitable": 0.79
+      }
+    },
+    "react": {
+      "n": 24,
+      "avg_score": 0.96,
+      "yes_rate": {
+        "exploracion_ordenada": 0.0,
+        "acciones_apoyadas": 0.12,
+        "sin_redundancia_evitable": 0.83
+      }
+    },
+    "summarizer": {
+      "n": 23,
+      "avg_score": 0.96,
+      "yes_rate": {
+        "exploracion_ordenada": 0.13,
+        "acciones_apoyadas": 0.22,
+        "sin_redundancia_evitable": 0.61
+      }
+    }
+  }
+}
+
+Veredictos en: eval/results/20260825-011809/judged.jsonl

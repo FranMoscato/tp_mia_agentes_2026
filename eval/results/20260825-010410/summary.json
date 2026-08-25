@@ -1,0 +1,203 @@
+{
+  "meta": {
+    "timestamp": "20260825-010410",
+    "module": "student_framework",
+    "max_iterations": 30,
+    "repeats": 1,
+    "provider": "ollama",
+    "model": "qwen2.5:3b",
+    "bedrock_model_id": "amazon.nova-lite-v1:0",
+    "aws_profile": "882885365928_udesasbx_IsbUsersPS",
+    "aws_region": "us-east-1",
+    "prompt_version": "escape-v1",
+    "git_commit": "b3bffcd"
+  },
+  "summary": {
+    "n_cases": 24,
+    "by_config": {
+      "gate": {
+        "n": 8,
+        "solved": 0,
+        "accuracy": 0.0,
+        "accuracy_ci95": [
+          0.0,
+          0.324
+        ],
+        "pass_hat_k": 0.0,
+        "k": 1,
+        "pass_k_scenarios": "0/8",
+        "avg_calls_overhead_vs_optimal": null,
+        "avg_tool_calls": 1.5,
+        "latency_p50_s": 3.368,
+        "latency_p95_s": 6.236,
+        "tokens_per_solved": null,
+        "avg_agent_tokens": 6600.62,
+        "avg_memory_tokens": 0.0,
+        "tool_usage": {
+          "look": 8,
+          "take": 1,
+          "examine": 3
+        },
+        "invalid_action_rate": 0.0,
+        "avg_progress": {
+          "items_taken": 0.0,
+          "rooms_visited": 0.0,
+          "items_opened": 0.0
+        },
+        "failure_breakdown": {
+          "prosa_en_vez_de_tool": 8
+        },
+        "prosa_variant_breakdown": {
+          "otro": 3,
+          "intencion_anunciada": 1,
+          "inversion_de_rol": 4
+        },
+        "by_difficulty": {
+          "easy": {
+            "n": 1,
+            "solved": 0,
+            "accuracy": 0.0
+          },
+          "extreme": {
+            "n": 3,
+            "solved": 0,
+            "accuracy": 0.0
+          },
+          "hard": {
+            "n": 2,
+            "solved": 0,
+            "accuracy": 0.0
+          },
+          "medium": {
+            "n": 2,
+            "solved": 0,
+            "accuracy": 0.0
+          }
+        }
+      },
+      "react": {
+        "n": 8,
+        "solved": 0,
+        "accuracy": 0.0,
+        "accuracy_ci95": [
+          0.0,
+          0.324
+        ],
+        "pass_hat_k": 0.0,
+        "k": 1,
+        "pass_k_scenarios": "0/8",
+        "avg_calls_overhead_vs_optimal": null,
+        "avg_tool_calls": 2.38,
+        "latency_p50_s": 4.156,
+        "latency_p95_s": 7.602,
+        "tokens_per_solved": null,
+        "avg_agent_tokens": 9138.25,
+        "avg_memory_tokens": 0.0,
+        "tool_usage": {
+          "look": 12,
+          "examine": 5,
+          "take": 2
+        },
+        "invalid_action_rate": 0.0,
+        "avg_progress": {
+          "items_taken": 0.0,
+          "rooms_visited": 0.0,
+          "items_opened": 0.0
+        },
+        "failure_breakdown": {
+          "prosa_en_vez_de_tool": 7,
+          "loop_detected": 1
+        },
+        "prosa_variant_breakdown": {
+          "intencion_anunciada": 1,
+          "inversion_de_rol": 4,
+          "otro": 2
+        },
+        "by_difficulty": {
+          "easy": {
+            "n": 1,
+            "solved": 0,
+            "accuracy": 0.0
+          },
+          "extreme": {
+            "n": 3,
+            "solved": 0,
+            "accuracy": 0.0
+          },
+          "hard": {
+            "n": 2,
+            "solved": 0,
+            "accuracy": 0.0
+          },
+          "medium": {
+            "n": 2,
+            "solved": 0,
+            "accuracy": 0.0
+          }
+        }
+      },
+      "summarizer": {
+        "n": 8,
+        "solved": 0,
+        "accuracy": 0.0,
+        "accuracy_ci95": [
+          0.0,
+          0.324
+        ],
+        "pass_hat_k": 0.0,
+        "k": 1,
+        "pass_k_scenarios": "0/8",
+        "avg_calls_overhead_vs_optimal": null,
+        "avg_tool_calls": 2.12,
+        "latency_p50_s": 27.858,
+        "latency_p95_s": 53.915,
+        "tokens_per_solved": null,
+        "avg_agent_tokens": 9382.88,
+        "avg_memory_tokens": 6127.38,
+        "tool_usage": {
+          "look": 8,
+          "take": 1,
+          "examine": 7,
+          "use": 1
+        },
+        "invalid_action_rate": 0.059,
+        "avg_progress": {
+          "items_taken": 0.0,
+          "rooms_visited": 0.0,
+          "items_opened": 0.0
+        },
+        "failure_breakdown": {
+          "prosa_en_vez_de_tool": 6,
+          "tool_errors": 1,
+          "loop_detected": 1
+        },
+        "prosa_variant_breakdown": {
+          "otro": 2,
+          "inversion_de_rol": 4
+        },
+        "by_difficulty": {
+          "easy": {
+            "n": 1,
+            "solved": 0,
+            "accuracy": 0.0
+          },
+          "extreme": {
+            "n": 3,
+            "solved": 0,
+            "accuracy": 0.0
+          },
+          "hard": {
+            "n": 2,
+            "solved": 0,
+            "accuracy": 0.0
+          },
+          "medium": {
+            "n": 2,
+            "solved": 0,
+            "accuracy": 0.0
+          }
+        }
+      }
+    }
+  }
+}

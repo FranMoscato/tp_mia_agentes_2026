@@ -1,0 +1,260 @@
+{
+  "meta": {
+    "timestamp": "20260825-014434",
+    "module": "student_framework",
+    "max_iterations": 30,
+    "repeats": 3,
+    "provider": "ollama",
+    "model": "llama3.2",
+    "bedrock_model_id": "amazon.nova-lite-v1:0",
+    "aws_profile": "882885365928_udesasbx_IsbUsersPS",
+    "aws_region": "us-east-1",
+    "prompt_version": "escape-v1",
+    "git_commit": "c9edd61"
+  },
+  "summary": {
+    "n_cases": 72,
+    "by_config": {
+      "gate": {
+        "n": 24,
+        "solved": 0,
+        "accuracy": 0.0,
+        "accuracy_ci95": [
+          0.0,
+          0.138
+        ],
+        "pass_hat_k": 0.0,
+        "k": 3,
+        "pass_k_scenarios": "0/8",
+        "avg_calls_overhead_vs_optimal": null,
+        "avg_tool_calls": 3.5,
+        "latency_p50_s": 2.474,
+        "latency_p95_s": 29.686,
+        "latency_agente_p50_s": 2.474,
+        "latency_summarizer_p50_s": 0.0,
+        "tokens_per_solved": null,
+        "avg_agent_tokens": 11907.83,
+        "avg_memory_tokens": 0.0,
+        "cost_usd_total": 0.0,
+        "cost_usd_per_case": 0.0,
+        "cost_usd_per_solved": null,
+        "solve_rate_by_scenario": {
+          "study-with-key": 0.0,
+          "color-locks": 0.0,
+          "library-search": 0.0,
+          "extreme-archive": 0.0,
+          "apartment-keys": 0.0,
+          "office-sequence": 0.0,
+          "vault-combination": 0.0,
+          "backtracking-vault": 0.0
+        },
+        "solve_rate_std": 0.0,
+        "redundancy_distribution": {
+          "1": 24
+        },
+        "tool_usage": {
+          "look": 32,
+          "examine": 35,
+          "take": 5,
+          "use": 5,
+          "go": 7
+        },
+        "invalid_action_rate": 0.893,
+        "avg_progress": {
+          "items_taken": 0.0,
+          "rooms_visited": 1.04,
+          "items_opened": 0.0
+        },
+        "failure_breakdown": {
+          "tool_errors": 20,
+          "exhausted_iterations": 2,
+          "prosa_en_vez_de_tool": 2
+        },
+        "prosa_variant_breakdown": {
+          "intencion_anunciada": 2
+        },
+        "by_difficulty": {
+          "easy": {
+            "n": 3,
+            "solved": 0,
+            "accuracy": 0.0
+          },
+          "extreme": {
+            "n": 9,
+            "solved": 0,
+            "accuracy": 0.0
+          },
+          "hard": {
+            "n": 6,
+            "solved": 0,
+            "accuracy": 0.0
+          },
+          "medium": {
+            "n": 6,
+            "solved": 0,
+            "accuracy": 0.0
+          }
+        }
+      },
+      "react": {
+        "n": 24,
+        "solved": 0,
+        "accuracy": 0.0,
+        "accuracy_ci95": [
+          0.0,
+          0.138
+        ],
+        "pass_hat_k": 0.0,
+        "k": 3,
+        "pass_k_scenarios": "0/8",
+        "avg_calls_overhead_vs_optimal": null,
+        "avg_tool_calls": 1.0,
+        "latency_p50_s": 2.25,
+        "latency_p95_s": 9.165,
+        "latency_agente_p50_s": 2.25,
+        "latency_summarizer_p50_s": 0.0,
+        "tokens_per_solved": null,
+        "avg_agent_tokens": 4720.62,
+        "avg_memory_tokens": 0.0,
+        "cost_usd_total": 0.0,
+        "cost_usd_per_case": 0.0,
+        "cost_usd_per_solved": null,
+        "solve_rate_by_scenario": {
+          "study-with-key": 0.0,
+          "color-locks": 0.0,
+          "library-search": 0.0,
+          "extreme-archive": 0.0,
+          "apartment-keys": 0.0,
+          "office-sequence": 0.0,
+          "vault-combination": 0.0,
+          "backtracking-vault": 0.0
+        },
+        "solve_rate_std": 0.0,
+        "redundancy_distribution": {
+          "1": 24
+        },
+        "tool_usage": {
+          "look": 23,
+          "go": 1
+        },
+        "invalid_action_rate": 0.958,
+        "avg_progress": {
+          "items_taken": 0.0,
+          "rooms_visited": 1.0,
+          "items_opened": 0.0
+        },
+        "failure_breakdown": {
+          "tool_errors": 23,
+          "prosa_en_vez_de_tool": 1
+        },
+        "prosa_variant_breakdown": {
+          "intencion_anunciada": 1
+        },
+        "by_difficulty": {
+          "easy": {
+            "n": 3,
+            "solved": 0,
+            "accuracy": 0.0
+          },
+          "extreme": {
+            "n": 9,
+            "solved": 0,
+            "accuracy": 0.0
+          },
+          "hard": {
+            "n": 6,
+            "solved": 0,
+            "accuracy": 0.0
+          },
+          "medium": {
+            "n": 6,
+            "solved": 0,
+            "accuracy": 0.0
+          }
+        }
+      },
+      "summarizer": {
+        "n": 24,
+        "solved": 2,
+        "accuracy": 0.083,
+        "accuracy_ci95": [
+          0.023,
+          0.258
+        ],
+        "pass_hat_k": 0.0,
+        "k": 3,
+        "pass_k_scenarios": "0/8",
+        "avg_calls_overhead_vs_optimal": 2.0,
+        "avg_tool_calls": 2.75,
+        "latency_p50_s": 10.096,
+        "latency_p95_s": 62.198,
+        "latency_agente_p50_s": 7.099,
+        "latency_summarizer_p50_s": 3.044,
+        "tokens_per_solved": 162824,
+        "avg_agent_tokens": 10074.67,
+        "avg_memory_tokens": 3494.0,
+        "cost_usd_total": 0.0,
+        "cost_usd_per_case": 0.0,
+        "cost_usd_per_solved": 0.0,
+        "solve_rate_by_scenario": {
+          "study-with-key": 0.667,
+          "color-locks": 0.0,
+          "library-search": 0.0,
+          "extreme-archive": 0.0,
+          "apartment-keys": 0.0,
+          "office-sequence": 0.0,
+          "vault-combination": 0.0,
+          "backtracking-vault": 0.0
+        },
+        "solve_rate_std": 0.22,
+        "redundancy_distribution": {
+          "1": 24
+        },
+        "tool_usage": {
+          "look": 30,
+          "examine": 16,
+          "take": 5,
+          "use": 5,
+          "go": 10
+        },
+        "invalid_action_rate": 0.424,
+        "avg_progress": {
+          "items_taken": 0.08,
+          "rooms_visited": 1.04,
+          "items_opened": 0.08
+        },
+        "failure_breakdown": {
+          "tool_errors": 18,
+          "success": 2,
+          "exhausted_iterations": 1,
+          "prosa_en_vez_de_tool": 3
+        },
+        "prosa_variant_breakdown": {
+          "intencion_anunciada": 3
+        },
+        "by_difficulty": {
+          "easy": {
+            "n": 3,
+            "solved": 2,
+            "accuracy": 0.667
+          },
+          "extreme": {
+            "n": 9,
+            "solved": 0,
+            "accuracy": 0.0
+          },
+          "hard": {
+            "n": 6,
+            "solved": 0,
+            "accuracy": 0.0
+          },
+          "medium": {
+            "n": 6,
+            "solved": 0,
+            "accuracy": 0.0
+          }
+        }
+      }
+    }
+  }
+}

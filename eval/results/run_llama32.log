@@ -1,0 +1,230 @@
+Computando óptimos (BFS sobre el grafo de estados)...
+  study-with-key: óptimo = 3
+  color-locks: óptimo = 11
+  library-search: óptimo = 7
+  extreme-archive: óptimo = 4
+  apartment-keys: óptimo = 7
+  office-sequence: óptimo = 13
+  vault-combination: óptimo = 21
+  backtracking-vault: óptimo = 18
+
+[1/72] study-with-key · react · repeat 0
+    ✗ goal=False calls=1 latency=10.197s
+[2/72] study-with-key · react · repeat 1
+    ✗ goal=False calls=1 latency=1.903s
+[3/72] study-with-key · react · repeat 2
+    ✗ goal=False calls=1 latency=1.98s
+[4/72] study-with-key · summarizer · repeat 0
+    ✗ goal=False calls=1 latency=9.665s
+[5/72] study-with-key · summarizer · repeat 1
+    ✓ goal=True calls=6 latency=53.399s
+[6/72] study-with-key · summarizer · repeat 2
+    ✓ goal=True calls=6 latency=63.751s
+[7/72] study-with-key · gate · repeat 0
+    ✗ goal=False calls=1 latency=2.244s
+[8/72] study-with-key · gate · repeat 1
+    ✗ goal=False calls=1 latency=2.126s
+[9/72] study-with-key · gate · repeat 2
+    ✗ goal=False calls=1 latency=2.205s
+[10/72] color-locks · react · repeat 0
+    ✗ goal=False calls=1 latency=2.828s
+[11/72] color-locks · react · repeat 1
+    ✗ goal=False calls=1 latency=2.184s
+[12/72] color-locks · react · repeat 2
+    ✗ goal=False calls=1 latency=2.065s
+[13/72] color-locks · summarizer · repeat 0
+    ✗ goal=False calls=1 latency=9.812s
+[14/72] color-locks · summarizer · repeat 1
+    ✗ goal=False calls=1 latency=10.481s
+[15/72] color-locks · summarizer · repeat 2
+    ✗ goal=False calls=1 latency=9.743s
+[16/72] color-locks · gate · repeat 0
+    ✗ goal=False calls=1 latency=6.279s
+[17/72] color-locks · gate · repeat 1
+    ✗ goal=False calls=1 latency=2.24s
+[18/72] color-locks · gate · repeat 2
+    ✗ goal=False calls=1 latency=2.258s
+[19/72] library-search · react · repeat 0
+    ✗ goal=False calls=1 latency=2.184s
+[20/72] library-search · react · repeat 1
+    ✗ goal=False calls=1 latency=2.167s
+[21/72] library-search · react · repeat 2
+    ✗ goal=False calls=1 latency=2.097s
+[22/72] library-search · summarizer · repeat 0
+    ✗ goal=False calls=1 latency=10.263s
+[23/72] library-search · summarizer · repeat 1
+    ✗ goal=False calls=1 latency=8.941s
+[24/72] library-search · summarizer · repeat 2
+    ✗ goal=False calls=1 latency=9.893s
+[25/72] library-search · gate · repeat 0
+    ✗ goal=False calls=1 latency=2.32s
+[26/72] library-search · gate · repeat 1
+    ✗ goal=False calls=1 latency=2.213s
+[27/72] library-search · gate · repeat 2
+    ✗ goal=False calls=1 latency=2.332s
+[28/72] extreme-archive · react · repeat 0
+    ✗ goal=False calls=1 latency=2.262s
+[29/72] extreme-archive · react · repeat 1
+    ✗ goal=False calls=1 latency=2.013s
+[30/72] extreme-archive · react · repeat 2
+    ✗ goal=False calls=1 latency=2.094s
+[31/72] extreme-archive · summarizer · repeat 0
+    ✗ goal=False calls=1 latency=8.939s
+[32/72] extreme-archive · summarizer · repeat 1
+    ✗ goal=False calls=1 latency=8.962s
+[33/72] extreme-archive · summarizer · repeat 2
+    ✗ goal=False calls=1 latency=9.161s
+[34/72] extreme-archive · gate · repeat 0
+    ✗ goal=False calls=1 latency=2.123s
+[35/72] extreme-archive · gate · repeat 1
+    ✗ goal=False calls=29 latency=35.857s
+[36/72] extreme-archive · gate · repeat 2
+    ✗ goal=False calls=1 latency=2.045s
+[37/72] apartment-keys · react · repeat 0
+    ✗ goal=False calls=1 latency=2.402s
+[38/72] apartment-keys · react · repeat 1
+    ✗ goal=False calls=1 latency=3.314s
+[39/72] apartment-keys · react · repeat 2
+    ✗ goal=False calls=1 latency=1.955s
+[40/72] apartment-keys · summarizer · repeat 0
+    ✗ goal=False calls=1 latency=11.409s
+[41/72] apartment-keys · summarizer · repeat 1
+    ✗ goal=False calls=1 latency=10.607s
+[42/72] apartment-keys · summarizer · repeat 2
+    ✗ goal=False calls=33 latency=283.078s
+[43/72] apartment-keys · gate · repeat 0
+    ✗ goal=False calls=1 latency=2.458s
+[44/72] apartment-keys · gate · repeat 1
+    ✗ goal=False calls=33 latency=31.193s
+[45/72] apartment-keys · gate · repeat 2
+    ✗ goal=False calls=1 latency=2.874s
+[46/72] office-sequence · react · repeat 0
+    ✗ goal=False calls=1 latency=13.996s
+[47/72] office-sequence · react · repeat 1
+    ✗ goal=False calls=1 latency=2.346s
+[48/72] office-sequence · react · repeat 2
+    ✗ goal=False calls=1 latency=2.557s
+[49/72] office-sequence · summarizer · repeat 0
+    ✗ goal=False calls=1 latency=9.716s
+[50/72] office-sequence · summarizer · repeat 1
+    ✗ goal=False calls=1 latency=9.05s
+[51/72] office-sequence · summarizer · repeat 2
+    ✗ goal=False calls=1 latency=9.205s
+[52/72] office-sequence · gate · repeat 0
+    ✗ goal=False calls=1 latency=2.531s
+[53/72] office-sequence · gate · repeat 1
+    ✗ goal=False calls=1 latency=2.333s
+[54/72] office-sequence · gate · repeat 2
+    ✗ goal=False calls=1 latency=2.489s
+[55/72] vault-combination · react · repeat 0
+    ✗ goal=False calls=1 latency=2.523s
+[56/72] vault-combination · react · repeat 1
+    ✗ goal=False calls=1 latency=2.239s
+[57/72] vault-combination · react · repeat 2
+    ✗ goal=False calls=1 latency=2.213s
+[58/72] vault-combination · summarizer · repeat 0
+    ✗ goal=False calls=1 latency=11.661s
+[59/72] vault-combination · summarizer · repeat 1
+    ✗ goal=False calls=1 latency=10.793s
+[60/72] vault-combination · summarizer · repeat 2
+    ✗ goal=False calls=1 latency=11.495s
+[61/72] vault-combination · gate · repeat 0
+    ✗ goal=False calls=1 latency=2.539s
+[62/72] vault-combination · gate · repeat 1
+    ✗ goal=False calls=1 latency=21.149s
+[63/72] vault-combination · gate · repeat 2
+    ✗ goal=False calls=1 latency=2.659s
+[64/72] backtracking-vault · react · repeat 0
+    ✗ goal=False calls=1 latency=2.357s
+[65/72] backtracking-vault · react · repeat 1
+    ✗ goal=False calls=1 latency=2.407s
+[66/72] backtracking-vault · react · repeat 2
+    ✗ goal=False calls=1 latency=2.458s
+[67/72] backtracking-vault · summarizer · repeat 0
+    ✗ goal=False calls=1 latency=9.929s
+[68/72] backtracking-vault · summarizer · repeat 1
+    ✗ goal=False calls=1 latency=15.053s
+[69/72] backtracking-vault · summarizer · repeat 2
+    ✗ goal=False calls=1 latency=12.056s
+[70/72] backtracking-vault · gate · repeat 0
+    ✗ goal=False calls=1 latency=2.724s
+[71/72] backtracking-vault · gate · repeat 1
+    ✗ goal=False calls=1 latency=3.012s
+[72/72] backtracking-vault · gate · repeat 2
+    ✗ goal=False calls=1 latency=2.606s
+
+# Evaluación M3 — resumen
+
+- Fecha: 20260825-014434
+- Módulo del agente: `student_framework`
+- Provider/modelo: `ollama` / `llama3.2`
+- Versión de prompt: `escape-v1` · commit: `c9edd61`
+- max_iterations: 30 · repeats: 3
+- Casos totales: 72
+
+## Métricas por configuración
+
+_Latencia en percentiles (nunca promedio); costo por caso resuelto; pass^k = resolver el escenario en los k intentos._
+
+| Config | Accuracy (IC95%) | pass^k | Overhead vs óptimo | Tokens/resuelto | Latencia p50/p95 (s) |
+|---|---:|---:|---:|---:|---:|
+| gate | 0.0 [0.0, 0.138] | 0.0 (0/8, k=3) | — | — | 2.474 / 29.686 |
+| react | 0.0 [0.0, 0.138] | 0.0 (0/8, k=3) | — | — | 2.25 / 9.165 |
+| summarizer | 0.083 [0.023, 0.258] | 0.0 (0/8, k=3) | 2.0x | 162824 | 10.096 / 62.198 |
+
+### gate
+
+**Accuracy por dificultad:**
+
+| Dificultad | Resueltos | Accuracy |
+|---|---:|---:|
+| easy | 0/3 | 0.0 |
+| extreme | 0/9 | 0.0 |
+| hard | 0/6 | 0.0 |
+| medium | 0/6 | 0.0 |
+
+**Modos de fallo:**
+
+- `tool_errors`: 20
+- `exhausted_iterations`: 2
+- `prosa_en_vez_de_tool`: 2
+    - intencion_anunciada: 2
+
+### react
+
+**Accuracy por dificultad:**
+
+| Dificultad | Resueltos | Accuracy |
+|---|---:|---:|
+| easy | 0/3 | 0.0 |
+| extreme | 0/9 | 0.0 |
+| hard | 0/6 | 0.0 |
+| medium | 0/6 | 0.0 |
+
+**Modos de fallo:**
+
+- `tool_errors`: 23
+- `prosa_en_vez_de_tool`: 1
+    - intencion_anunciada: 1
+
+### summarizer
+
+**Accuracy por dificultad:**
+
+| Dificultad | Resueltos | Accuracy |
+|---|---:|---:|
+| easy | 2/3 | 0.667 |
+| extreme | 0/9 | 0.0 |
+| hard | 0/6 | 0.0 |
+| medium | 0/6 | 0.0 |
+
+**Modos de fallo:**
+
+- `tool_errors`: 18
+- `prosa_en_vez_de_tool`: 3
+    - intencion_anunciada: 3
+- `success`: 2
+- `exhausted_iterations`: 1
+
+
+Resultados en: /Users/clarakearney/Documents/UdeSA/MIA/Agentes/tp_mia_agentes_2026/eval/results/20260825-014434

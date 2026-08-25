@@ -710,6 +710,10 @@ OLLAMA_HOST=http://localhost:11434 OLLAMA_MODEL=qwen2.5:3b \
   python eval/run.py --repeats 3
 
 # --- Con Bedrock (modelo fuerte; requiere lease + nova-lite habilitado) ---
+# El .env NO se exporta solo: `_env_value` lo lee para poblar el meta de la
+# corrida, pero boto3 lee del ENTORNO. Sin el `set -a` de abajo, el provider
+# se registra como bedrock en el meta y la llamada falla por credenciales.
+set -a && . ./.env && set +a
 python eval/run.py --repeats 3          # toma el provider del .env
 
 # Experimento 3 (ablación de prompt): escape-v1 vs. genérico

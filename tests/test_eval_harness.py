@@ -213,6 +213,34 @@ def test_summarize_observabilidad_tools_invalidas_progreso() -> None:
     assert m["avg_progress"]["items_opened"] == 1.0
 
 
+def test_costo_usd_pricing_y_local() -> None:
+    # nova-lite: 0.06 in / 0.24 out por 1M.
+    assert eval_run.costo_usd(1_000_000, 0, "amazon.nova-lite-v1:0") == 0.06
+    assert eval_run.costo_usd(0, 1_000_000, "amazon.nova-lite-v1:0") == 0.24
+    # modelo local / desconocido -> $0.
+    assert eval_run.costo_usd(1_000_000, 1_000_000, "qwen2.5:3b") == 0.0
+    assert eval_run.costo_usd(1_000_000, 1_000_000, None) == 0.0
+
+
+def test_summarize_costo_varianza_redundancia() -> None:
+    cases = [
+        _case(config="react", scenario="s1", goal_achieved=True, repeat=0,
+              agent_input_tokens=1_000_000, agent_output_tokens=0,
+              max_consecutive_repeats=1),
+        _case(config="react", scenario="s1", goal_achieved=False, repeat=1,
+              max_consecutive_repeats=3),
+    ]
+    m = eval_run.summarize(cases, 30, model="amazon.nova-lite-v1:0")["by_config"]["react"]
+    # Costo: 1M input a 0.06 sobre 2 casos.
+    assert m["cost_usd_total"] == 0.06
+    assert m["cost_usd_per_case"] == 0.03
+    assert m["cost_usd_per_solved"] == 0.06  # 1 resuelto
+    # Varianza: s1 resuelto 1/2 -> un solo escenario, std 0.
+    assert m["solve_rate_by_scenario"] == {"s1": 0.5}
+    # Redundancia: rachas 1 y 3.
+    assert m["redundancy_distribution"] == {"1": 1, "3": 1}
+
+
 def test_summarize_desglosa_variantes_de_prosa() -> None:
     cases = [
         _case(config="react", scenario="s1", goal_achieved=False, tool_calls=2,

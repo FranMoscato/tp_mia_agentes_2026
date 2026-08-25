@@ -472,6 +472,9 @@ class MyAgent:
         # Se reinicia en cada `run()`. El eval lee estos campos tras `run()`.
         self.memory_input_tokens = 0
         self.memory_output_tokens = 0
+        # Tiempo (s) gastado en las llamadas del summarizer, para desglosar la
+        # latencia total en agente vs. resumen.
+        self.memory_latency_s = 0.0
 
         # Llamadas al LLM del último `run()`. El tope de `max_iterations` se
         # cuenta en LLAMADAS, no en tool-calls (un `assistant` puede pedir
@@ -529,6 +532,7 @@ class MyAgent:
         # Costo del summarizer de ESTA corrida (ver __init__): arranca en 0.
         self.memory_input_tokens = 0
         self.memory_output_tokens = 0
+        self.memory_latency_s = 0.0
         self.llm_calls = 0
 
         # Esquemas de las herramientas a exponer al LLM
@@ -1127,11 +1131,15 @@ class MyAgent:
         - No inventes IDs.
         """
 
-        return self.structured_call(
-            prompt=prompt,
-            schema=GameState,
-            system=MEMORY_SYSTEM_PROMPT,
-            max_repair_attempts=3,
-            on_usage=self._acumular_memory_tokens,
-        )
+        t0 = time.perf_counter()
+        try:
+            return self.structured_call(
+                prompt=prompt,
+                schema=GameState,
+                system=MEMORY_SYSTEM_PROMPT,
+                max_repair_attempts=3,
+                on_usage=self._acumular_memory_tokens,
+            )
+        finally:
+            self.memory_latency_s += time.perf_counter() - t0
 

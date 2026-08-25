@@ -34,6 +34,7 @@ import json
 import math
 import os
 import re
+import statistics
 import subprocess
 import sys
 import time
@@ -76,6 +77,31 @@ CONFIGS: dict[str, dict[str, Any]] = {
 # Tope de iteraciones para el eval. El default del agente (20) no alcanza para
 # los escenarios extreme (vault-combination óptimo = 21); damos holgura.
 DEFAULT_MAX_ITERATIONS = 30
+
+# Precio on-demand en USD por 1M de tokens (input, output). Se matchea por
+# substring del model id. Modelos locales (Ollama) o desconocidos = $0.
+# Fuente: precios publicados de Amazon Bedrock (Nova). Actualizar si cambian.
+_PRICING_USD_POR_1M: dict[str, tuple[float, float]] = {
+    "nova-lite": (0.06, 0.24),
+    "nova-micro": (0.035, 0.14),
+    "nova-pro": (0.80, 3.20),
+}
+
+
+def costo_usd(input_tokens: int, output_tokens: int, model: str | None) -> float:
+    """Costo estimado en USD de una cantidad de tokens para `model`.
+
+    0 para modelos locales/desconocidos (Ollama). Es un estimado: sirve para
+    comparar configs/modelos, no como factura.
+    """
+    if not model:
+        return 0.0
+    pin = pout = 0.0
+    for clave, (i, o) in _PRICING_USD_POR_1M.items():
+        if clave in model:
+            pin, pout = i, o
+            break
+    return round(input_tokens / 1e6 * pin + output_tokens / 1e6 * pout, 6)
 
 
 # ---------------------------------------------------------------------------
@@ -216,8 +242,13 @@ def _wilson_ci(k: int, n: int, z: float = 1.96) -> list[float | None]:
     return [round(max(0.0, centro - margen), 3), round(min(1.0, centro + margen), 3)]
 
 
-def summarize(cases: list[dict[str, Any]], max_iterations: int) -> dict[str, Any]:
-    """Agrega las corridas en métricas por config, por dificultad y globales."""
+def summarize(
+    cases: list[dict[str, Any]], max_iterations: int, model: str | None = None
+) -> dict[str, Any]:
+    """Agrega las corridas en métricas por config, por dificultad y globales.
+
+    `model` habilita el costo en USD (0 para modelos locales/desconocidos).
+    """
     summary: dict[str, Any] = {"n_cases": len(cases), "by_config": {}}
 
     configs = sorted({c["config"] for c in cases})
@@ -278,6 +309,34 @@ def summarize(cases: list[dict[str, Any]], max_iterations: int) -> dict[str, Any
 
         latencias = [c["latency_s"] for c in sub]
 
+        # Costo en USD (estimado): total, por caso y por resuelto.
+        total_in = sum(c["agent_input_tokens"] + c["memory_input_tokens"] for c in sub)
+        total_out = sum(c["agent_output_tokens"] + c["memory_output_tokens"] for c in sub)
+        cost_total = costo_usd(total_in, total_out, model)
+        cost_por_caso = round(cost_total / n, 6) if n else None
+        cost_por_resuelto = round(cost_total / len(exitosos), 6) if exitosos else None
+
+        # Varianza entre repeats: tasa de éxito por escenario y su desvío.
+        solve_rates = {
+            sid: sum(x["goal_achieved"] for x in v) / len(v)
+            for sid, v in by_scen.items()
+        }
+        solve_rate_std = (
+            round(statistics.pstdev(solve_rates.values()), 3)
+            if len(solve_rates) > 1 else 0.0
+        )
+
+        # Redundancia: distribución de la racha máxima de tool-calls repetidas.
+        redundancia: dict[str, int] = {}
+        for c in sub:
+            r = c.get("max_consecutive_repeats", 0)
+            redundancia[str(r)] = redundancia.get(str(r), 0) + 1
+
+        # Latencia desglosada agente vs. summarizer (memory_latency_s se captura
+        # en run_one; en corridas previas es 0).
+        mem_lat = [c.get("memory_latency_s", 0) for c in sub]
+        agente_lat = [c["latency_s"] - c.get("memory_latency_s", 0) for c in sub]
+
         # Observabilidad del comportamiento:
         # - uso de herramientas (¿sobre-mira?, ¿nunca usa?)
         # - tasa de acción inválida (tool_errors / tool_calls): movidas ilegales
@@ -308,6 +367,8 @@ def summarize(cases: list[dict[str, Any]], max_iterations: int) -> dict[str, Any
             "avg_tool_calls": _mean([c["tool_calls"] for c in sub]),
             "latency_p50_s": _percentile(latencias, 0.50),
             "latency_p95_s": _percentile(latencias, 0.95),
+            "latency_agente_p50_s": _percentile(agente_lat, 0.50),
+            "latency_summarizer_p50_s": _percentile(mem_lat, 0.50),
             "tokens_per_solved": tokens_por_resuelto,
             "avg_agent_tokens": _mean(
                 [c["agent_input_tokens"] + c["agent_output_tokens"] for c in sub]
@@ -315,6 +376,12 @@ def summarize(cases: list[dict[str, Any]], max_iterations: int) -> dict[str, Any
             "avg_memory_tokens": _mean(
                 [c["memory_input_tokens"] + c["memory_output_tokens"] for c in sub]
             ),
+            "cost_usd_total": cost_total,
+            "cost_usd_per_case": cost_por_caso,
+            "cost_usd_per_solved": cost_por_resuelto,
+            "solve_rate_by_scenario": {k: round(v, 3) for k, v in solve_rates.items()},
+            "solve_rate_std": solve_rate_std,
+            "redundancy_distribution": redundancia,
             "tool_usage": tool_usage,
             "invalid_action_rate": invalid_rate,
             "avg_progress": {
@@ -513,6 +580,7 @@ def run_one(
         "memory_input_tokens": getattr(agent, "memory_input_tokens", 0),
         "memory_output_tokens": getattr(agent, "memory_output_tokens", 0),
         "latency_s": latency,
+        "memory_latency_s": round(getattr(agent, "memory_latency_s", 0.0), 3),
         "steps": steps,
     }
 
@@ -663,7 +731,7 @@ def main(argv: list[str] | None = None) -> int:
         "prompt_version": getattr(module, "ESCAPE_ROOM_SYSTEM_PROMPT_VERSION", None),
         "git_commit": _git_commit(),
     }
-    summary = summarize(cases, args.max_iterations)
+    summary = summarize(cases, args.max_iterations, model=model)
     (out_dir / "summary.json").write_text(
         json.dumps({"meta": meta, "summary": summary}, indent=2, ensure_ascii=False),
         encoding="utf-8",

@@ -153,6 +153,80 @@ def grafico_tools(by_config: dict, meta: dict) -> None:
     plt.close(fig)
 
 
+def grafico_latencia_desglosada(by_config: dict, meta: dict) -> None:
+    """Latencia p50 desglosada: agente vs. llamada del summarizer (apilada)."""
+    configs = _orden_configs(by_config)
+    agente = [by_config[c].get("latency_agente_p50_s") or 0 for c in configs]
+    resumen = [by_config[c].get("latency_summarizer_p50_s") or 0 for c in configs]
+    if not any(resumen):
+        return  # sin summarizer instrumentado: no aporta
+    fig, ax = plt.subplots(figsize=(7, 4.2))
+    ax.bar(configs, agente, label="agente", color="#2563eb")
+    ax.bar(configs, resumen, bottom=agente, label="summarizer", color="#f59e0b")
+    ax.set_ylabel("Latencia p50 (s)")
+    ax.set_title(f"Latencia p50 desglosada (agente vs. resumen)\n"
+                 f"({meta.get('provider')}/{meta.get('model')})")
+    ax.legend()
+    ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout()
+    fig.savefig(_DOCS / "m3_latencia_desglosada.png", dpi=150)
+    plt.close(fig)
+
+
+def grafico_redundancia(by_config: dict, meta: dict) -> None:
+    """Distribución de la racha máxima de tool-calls repetidas (señal de loop)."""
+    configs = _orden_configs(by_config)
+    rachas = sorted({int(r) for c in configs
+                     for r in by_config[c].get("redundancy_distribution", {})})
+    if not rachas:
+        return
+    x = range(len(configs))
+    n = len(rachas)
+    w = 0.8 / max(n, 1)
+    fig, ax = plt.subplots(figsize=(7, 4.2))
+    grises = ["#bfdbfe", "#60a5fa", "#f59e0b", "#ef4444", "#7f1d1d"]
+    for i, r in enumerate(rachas):
+        vals = [by_config[c].get("redundancy_distribution", {}).get(str(r), 0) for c in configs]
+        offs = [xi - 0.4 + w / 2 + i * w for xi in x]
+        ax.bar(offs, vals, w, label=f"racha {r}", color=grises[min(i, len(grises) - 1)])
+    ax.set_xticks(list(x))
+    ax.set_xticklabels(configs)
+    ax.set_ylabel("Casos")
+    ax.set_title(f"Redundancia: racha máx. de tool-calls repetidas\n"
+                 f"({meta.get('provider')}/{meta.get('model')})")
+    ax.legend(fontsize=8)
+    ax.spines[["top", "right"]].set_visible(False)
+    fig.tight_layout()
+    fig.savefig(_DOCS / "m3_redundancia.png", dpi=150)
+    plt.close(fig)
+
+
+def grafico_heatmap(by_config: dict, meta: dict) -> None:
+    """Heatmap escenario × config de tasa de éxito (variabilidad por escenario)."""
+    configs = _orden_configs(by_config)
+    escenarios = sorted({s for c in configs
+                         for s in by_config[c].get("solve_rate_by_scenario", {})})
+    if not escenarios:
+        return
+    matriz = [[by_config[c].get("solve_rate_by_scenario", {}).get(s, 0.0)
+               for c in configs] for s in escenarios]
+
+    fig, ax = plt.subplots(figsize=(6.5, 5.2))
+    im = ax.imshow(matriz, cmap="Greens", vmin=0, vmax=1, aspect="auto")
+    ax.set_xticks(range(len(configs)), labels=configs)
+    ax.set_yticks(range(len(escenarios)), labels=escenarios, fontsize=8)
+    for i in range(len(escenarios)):
+        for j in range(len(configs)):
+            ax.text(j, i, f"{matriz[i][j]:.2f}", ha="center", va="center",
+                    fontsize=8, color="#111827")
+    ax.set_title(f"Tasa de éxito por escenario × config\n"
+                 f"({meta.get('provider')}/{meta.get('model')}, repeats={meta.get('repeats')})")
+    fig.colorbar(im, ax=ax, label="solve rate", shrink=0.8)
+    fig.tight_layout()
+    fig.savefig(_DOCS / "m3_heatmap.png", dpi=150)
+    plt.close(fig)
+
+
 def grafico_judge(judge_summary: dict, meta: dict) -> None:
     configs = [c for c in ("react", "summarizer", "gate") if c in judge_summary]
     if not configs:
@@ -189,6 +263,14 @@ def main() -> None:
     grafico_costo(by_config, meta)
     grafico_tools(by_config, meta)
     generados = ["m3_latencia.png", "m3_fallos.png", "m3_costo.png", "m3_tools.png"]
+    for fn, nombre in (
+        (grafico_latencia_desglosada, "m3_latencia_desglosada.png"),
+        (grafico_redundancia, "m3_redundancia.png"),
+        (grafico_heatmap, "m3_heatmap.png"),
+    ):
+        fn(by_config, meta)
+        if (_DOCS / nombre).exists():
+            generados.append(nombre)
 
     judge_path = results / "judge_summary.json"
     if judge_path.exists():

@@ -1,10 +1,10 @@
 # Informe — Milestone 3: Evaluación sobre salas de escape
 
 > **Estado del documento.** Las 5 secciones están completas con datos reales de
-> una corrida local (`ollama` / `qwen2.5:3b`, 8 escenarios × 3 configs, repeats
-> 1). Marcamos con `†` los números que se refrescan con la corrida `--repeats 3`
-> (en curso) y con la corrida en Bedrock (modelo fuerte), pendiente del lease de
-> AWS. Las conclusiones cualitativas ya son estables.
+> una corrida local (`ollama` / `qwen2.5:3b`, 8 escenarios × 3 configs × **3
+> repeats** = 72 casos). Marcamos con `†` los números que se refrescan con la
+> corrida en Bedrock (modelo fuerte), pendiente del lease de AWS. Las
+> conclusiones ya son estables.
 
 ## Resumen
 
@@ -119,28 +119,37 @@ indistinguibles. El núcleo de métricas, la búsqueda del óptimo y el judge es
 
 ## 3. Resultados
 
-> Corrida: `python eval/run.py` con `ollama` / `qwen2.5:3b`, prompt `escape-v1`,
-> `max_iterations=30`, 8 escenarios × 3 configs, repeats 1. Un piloto previo en
-> `nova-lite-v1:0` (Bedrock, config `react`) dio el mismo cuadro (0/8, prosa
-> dominante), lo que corrobora que el hallazgo no es artefacto de un modelo.
+> Corrida: `python eval/run.py --repeats 3` con `ollama` / `qwen2.5:3b`, prompt
+> `escape-v1`, `max_iterations=30`, 8 escenarios × 3 configs × 3 repeats = 72
+> casos. Un piloto previo en `nova-lite-v1:0` (Bedrock, config `react`) dio el
+> mismo cuadro (0/8, prosa dominante), lo que corrobora que el hallazgo no es
+> artefacto de un modelo.
 
 ### 3.1 Tabla principal por configuración
 
-| Config | Accuracy (IC95%) | pass^k | Overhead vs óptimo | Latencia p50/p95 (s) |
+Cada config corre los 8 escenarios × 3 repeats = 24 casos.
+
+| Config | Accuracy (IC95%) | pass^k | Varianza (std) | Latencia p50/p95 (s) |
 |---|---:|---:|---:|---:|
-| `react` | 0/8 [0.0, 0.32]† | 0/8† | — (0 resueltos) | 4.2 / 7.6 |
-| `summarizer` | 0/8 [0.0, 0.32]† | 0/8† | — | **27.9 / 53.9** |
-| `gate` | 0/8 [0.0, 0.32]† | 0/8† | — | 3.4 / 6.2 |
+| `react` | 0/24 [0.0, 0.14]† | 0/8† | 0.0 | 2.7 / 6.1 |
+| `summarizer` | 0/24 [0.0, 0.14]† | 0/8† | 0.0 | **25.9 / 50.1** |
+| `gate` | 0/24 [0.0, 0.14]† | 0/8† | 0.0 | 3.6 / 5.3 |
 
-Con este modelo **ninguna configuración abre una puerta**: el techo lo pone la
-disciplina de tool-calling, no el framework (§3.3). El overhead vs. óptimo queda
-sin datos por falta de casos resueltos —se completará con la corrida en Bedrock.
+Con este modelo **ninguna configuración abre una puerta**, y la **varianza entre
+repeats es 0**: no es *flaky*, falla de forma **consistente**. El techo lo pone
+la disciplina de tool-calling, no el framework (§3.3). (El único éxito que vimos
+—`study-with-key` en un smoke suelto— no se repitió en 3 intentos: 0/3.)
 
-### 3.2 Accuracy por dificultad
+### 3.2 Accuracy por dificultad y por escenario
 
-Todas las celdas dan 0 con `qwen2.5:3b` (0/8 en los tres configs). El interés no
-está en la accuracy —uniformemente 0— sino en **cómo** falla cada config, que es
-donde los experimentos separan aguas (§3.3, §4).
+Todas las celdas dan 0 con `qwen2.5:3b`. La vista escenario × config lo hace
+explícito y sirve para leer *dónde* falla cada config (con Bedrock, dónde
+empieza a resolver):
+
+![Tasa de éxito por escenario × config](docs/m3_heatmap.png)
+
+El interés no está en la accuracy —uniformemente 0— sino en **cómo** falla cada
+config, que es donde los experimentos separan aguas (§3.3, §4).
 
 **Óptimo por escenario (BFS, = enunciado):** study-with-key 3 · color-locks 11 ·
 apartment-keys 7 · library-search 7 · office-sequence 13 · extreme-archive 4 ·
@@ -154,11 +163,13 @@ Categorías (definidas y verificadas **mirando trazas**, no a priori):
 
 ![Modos de fallo por configuración](docs/m3_fallos.png)
 
+Sobre 24 casos por config (8 escenarios × 3 repeats):
+
 | Config | prosa_en_vez_de_tool | loop_detected | tool_errors |
 |---|---:|---:|---:|
-| `react` | 7 (inv. rol 4 · intención 1 · otro 2) | 1 | 0 |
-| `summarizer` | 6 (inv. rol 4 · otro 2) | 1 | 1 |
-| `gate` | **8** (inv. rol 4 · intención 1 · otro 3) | **0** | **0** |
+| `react` | 24 | 0 | 0 |
+| `summarizer` | 19 | **3** | **2** |
+| `gate` | 24 | **0** | **0** |
 
 **Modo dominante: `prosa_en_vez_de_tool`.** El agente **deja de llamar
 herramientas y "habla"** en lugar de actuar. Dos variantes, tomadas de las
@@ -172,6 +183,16 @@ trazas reales:
 El fallo es de **disciplina de tool-calling**, no de razonamiento espacial: el
 agente entiende qué hacer pero lo **describe** en vez de emitir el `tool_call`.
 Por eso el gate (§4.2) no lo elimina —solo limpia los fallos por uso inválido.
+
+**Redundancia (señal de loop).** Medimos la racha máxima de tool-calls idénticas
+por caso:
+
+![Redundancia: racha máxima de tool-calls repetidas](docs/m3_redundancia.png)
+
+`react` y `gate` casi no repiten (racha 1); el **`summarizer` es el que más
+loopea** (casos con rachas de 3 y hasta 5). Consistente con que re-inyectar un
+estado resumido a veces **refuerza** una acción equivocada en lugar de
+corregirla —otro costo del resumen, además de la latencia.
 
 ### 3.4 Resultados cualitativos (LLM-as-judge)
 
@@ -226,9 +247,10 @@ Para no reducir todo a "0/8", instrumentamos **qué hace** el agente:
   `use(llave, puerta)` y resolvió `study-with-key`; es **inconsistencia**, con
   varianza entre corridas —otra razón para medir `pass^k` y no una sola corrida.
 - **Tasa de acción inválida** (`tool_errors/tool_calls`): `react` 0.0, `gate`
-  0.0, `summarizer` 0.06. Baja en todos porque el agente apenas llega a
+  0.0, `summarizer` 0.03. Baja en todos porque el agente apenas llega a
   intentar acciones que un gate rechazaría; el gate la mantiene en 0 por
-  construcción.
+  construcción (el `summarizer`, que sí intenta más `use`, es el único con
+  acciones inválidas).
 - **Progreso parcial** (`items_taken`, `rooms_visited`, `items_opened`): con
   `qwen2.5:3b` es ~0 (el agente se traba antes de avanzar). Esta métrica se
   captura por corrida y será informativa con un modelo que sí actúe (Bedrock):
@@ -237,6 +259,13 @@ Para no reducir todo a "0/8", instrumentamos **qué hace** el agente:
 **Costo en tokens** (agente vs. summarizer):
 
 ![Costo en tokens por configuración](docs/m3_costo.png)
+
+El summarizer suma **~6.100 tokens/caso (+65%)** sin resolver nada más. Además
+del conteo de tokens, el harness estima el **costo en USD** por caso y por caso
+resuelto (`cost_usd_*` en el `summary.json`), usando el pricing on-demand del
+modelo —$0 para modelos locales como `qwen2.5:3b`, y con precio real en Bedrock
+(`nova-lite`), donde el sobrecosto del resumen se traduce directamente en
+dólares.†
 
 ---
 
@@ -259,12 +288,14 @@ estudio (los demás quedan fijos).
 
 ![Latencia p50/p95 por configuración](docs/m3_latencia.png)
 
-- **Resultado.** Accuracy **sin cambios** (0/8 vs 0/8), pero el resumen
-  **multiplica la latencia ~7×**: p95 **53.9 s** vs 7.6 s de `react` (la llamada
-  LLM extra por paso). Además introdujo un fallo `tool_errors` que `react` no
-  tenía. No pudimos confirmar la parte "ayuda en `extreme-archive`" de la
-  hipótesis: con este modelo el agente falla **aguas arriba** (prosa) y nunca
-  llega a desbordar el contexto, que es donde el resumen pagaría.
+- **Resultado.** Accuracy **sin cambios** (0/24 vs 0/24), pero el resumen
+  **multiplica la latencia ~8×**: p95 **50.1 s** vs 6.1 s de `react` (la llamada
+  LLM extra por paso). Además **empeora los modos de fallo**: introduce 2
+  `tool_errors` y **3 `loop_detected`** que `react` no tiene (0 y 0) —re-inyectar
+  el estado resumido a veces refuerza una acción equivocada. No pudimos confirmar
+  la parte "ayuda en `extreme-archive`" de la hipótesis: con este modelo el
+  agente falla **aguas arriba** (prosa) y nunca llega a desbordar el contexto,
+  que es donde el resumen pagaría.
 - **Conclusión.** En este régimen el resumen es **costo puro**: confirma la
   primera mitad de la hipótesis (*perjudica cuando el contexto crudo entra*). La
   segunda mitad queda para un modelo que sí llame herramientas (Bedrock). Motiva
@@ -280,12 +311,12 @@ estudio (los demás quedan fijos).
   ~15 líneas y **0 tokens** debería eliminar `tool_errors`/uso inválido.
 - **Qué miramos.** Accuracy y desglose de modos de fallo (¿baja el uso inválido?),
   latencia (el gate no gasta tokens).
-- **Resultado.** Accuracy **sin cambios** (0/8): el gate **no puede forzar** que
+- **Resultado.** Accuracy **sin cambios** (0/24): el gate **no puede forzar** que
   el modelo emita un `tool_call` —solo bloquea las inválidas—, así que no cura la
   prosa. **Pero deja el perfil de fallos más limpio de los tres:** `tool_errors`
-  **0** y `loop_detected` **0** (vs. `react`, que tuvo 1 loop, y `summarizer`, con
-  tool_errors + loop). Y es incluso **ligeramente más rápido** (p95 6.2 vs 7.6 s),
-  a 0 tokens de costo.
+  **0** y `loop_detected` **0** sobre 24 casos, frente al `summarizer` (2
+  tool_errors + 3 loops). Y es incluso **ligeramente más rápido** que `react`
+  (p95 5.3 vs 6.1 s), a 0 tokens de costo.
 - **Conclusión.** El gate **entrega lo que el prompt no puede**: elimina por
   construcción los fallos de uso inválido y los loops. No genera éxitos por sí
   solo —eso requiere un modelo que llame herramientas—, pero es un **piso de

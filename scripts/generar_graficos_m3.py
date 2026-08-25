@@ -28,8 +28,11 @@ import matplotlib.pyplot as plt
 _REPO = Path(__file__).resolve().parent.parent
 _DOCS = _REPO / "docs"
 
-# Paleta por configuración (consistente con los diagramas de M1/M2).
-COLOR = {"react": "#2563eb", "summarizer": "#ca8a04", "gate": "#16a34a"}
+# Paleta por configuración: slots 1-3 de la paleta categórica validada del skill
+# de dataviz (blue/orange/aqua). Validada contra daltonismo con
+# scripts/validate_palette.js — la anterior (azul/ámbar/verde) fallaba la
+# separación CVD verde↔ámbar en protanopia.
+COLOR = {"react": "#2a78d6", "summarizer": "#eb6834", "gate": "#1baf7a"}
 # Colores de los modos de fallo (grises/rojos para lo malo, verde para éxito).
 COLOR_FALLO = {
     "success": "#16a34a",
@@ -92,7 +95,8 @@ def grafico_fallos(by_config: dict, meta: dict) -> None:
     for cat in orden:
         vals = [by_config[c]["failure_breakdown"].get(cat, 0) for c in configs]
         ax.bar(configs, vals, bottom=bottoms, label=cat,
-               color=COLOR_FALLO.get(cat, "#94a3b8"))
+               color=COLOR_FALLO.get(cat, "#94a3b8"),
+               edgecolor="white", linewidth=0.6)
         bottoms = [b + v for b, v in zip(bottoms, vals)]
     ax.set_ylabel("Casos")
     ax.set_title(f"Modos de fallo por configuración\n({meta.get('provider')}/{meta.get('model')}, "
@@ -111,9 +115,9 @@ def grafico_costo(by_config: dict, meta: dict) -> None:
     resumen = [by_config[c].get("avg_memory_tokens") or 0 for c in configs]
 
     fig, ax = plt.subplots(figsize=(7, 4.2))
-    b1 = ax.bar(configs, agente, label="tokens agente", color="#2563eb")
+    b1 = ax.bar(configs, agente, label="tokens agente", color="#2a78d6")
     b2 = ax.bar(configs, resumen, bottom=agente, label="tokens summarizer",
-                color="#f59e0b")
+                color="#eb6834")
     ax.bar_label(b1, fmt="%.0f", fontsize=8, label_type="center")
     for i, r in enumerate(resumen):
         if r:
@@ -132,8 +136,11 @@ def grafico_tools(by_config: dict, meta: dict) -> None:
     """Perfil de uso de herramientas por configuración (apilado por verbo)."""
     configs = _orden_configs(by_config)
     verbos = ["look", "examine", "take", "use", "go"]
-    colores = {"look": "#93c5fd", "examine": "#60a5fa", "take": "#2563eb",
-               "use": "#1e40af", "go": "#7c3aed"}
+    # Slots 1-5 de la paleta categórica validada (blue/orange/aqua/yellow/
+    # magenta). La anterior (4 tonos de azul) fallaba la separación en visión
+    # normal: ni con visión completa se distinguían look/examine.
+    colores = {"look": "#2a78d6", "examine": "#eb6834", "take": "#1baf7a",
+               "use": "#eda100", "go": "#e87ba4"}
 
     fig, ax = plt.subplots(figsize=(7, 4.2))
     bottoms = [0] * len(configs)
@@ -141,7 +148,8 @@ def grafico_tools(by_config: dict, meta: dict) -> None:
         vals = [by_config[c].get("tool_usage", {}).get(v, 0) for c in configs]
         if not any(vals):
             continue
-        ax.bar(configs, vals, bottom=bottoms, label=v, color=colores.get(v, "#94a3b8"))
+        ax.bar(configs, vals, bottom=bottoms, label=v, color=colores.get(v, "#94a3b8"),
+               edgecolor="white", linewidth=0.6)
         bottoms = [b + x for b, x in zip(bottoms, vals)]
     ax.set_ylabel("Tool-calls totales")
     ax.set_title(f"Perfil de uso de herramientas por configuración\n"
@@ -161,8 +169,8 @@ def grafico_latencia_desglosada(by_config: dict, meta: dict) -> None:
     if not any(resumen):
         return  # sin summarizer instrumentado: no aporta
     fig, ax = plt.subplots(figsize=(7, 4.2))
-    ax.bar(configs, agente, label="agente", color="#2563eb")
-    ax.bar(configs, resumen, bottom=agente, label="summarizer", color="#f59e0b")
+    ax.bar(configs, agente, label="agente", color="#2a78d6")
+    ax.bar(configs, resumen, bottom=agente, label="summarizer", color="#eb6834")
     ax.set_ylabel("Latencia p50 (s)")
     ax.set_title(f"Latencia p50 desglosada (agente vs. resumen)\n"
                  f"({meta.get('provider')}/{meta.get('model')})")

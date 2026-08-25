@@ -30,8 +30,9 @@ import matplotlib.pyplot as plt
 _REPO = Path(__file__).resolve().parent.parent
 _DOCS = _REPO / "docs"
 _CONFIGS = ("react", "summarizer", "gate")
-# Colores por modelo (se asignan por orden de aparición si hay más).
-_PALETA = ["#2563eb", "#ca8a04", "#16a34a", "#db2777", "#0891b2", "#7c3aed"]
+# Colores por modelo: paleta categórica validada del skill de dataviz (el
+# ORDEN de los slots es el mecanismo de seguridad CVD; no reordenar ni ciclar).
+_PALETA = ["#2a78d6", "#eb6834", "#1baf7a", "#eda100", "#e87ba4", "#4a3aa7"]
 
 
 def _cargar_corridas() -> dict[str, dict]:

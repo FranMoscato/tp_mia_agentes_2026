@@ -4,3 +4,7 @@
 **/.DS_Store
 .env
 .env.*
+
+# Artefactos derivados del harness de evaluación (M3)
+eval/results/
+eval/optimal_cache.json

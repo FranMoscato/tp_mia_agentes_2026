@@ -214,11 +214,17 @@ Para no reducir todo a "0/8", instrumentamos **qué hace** el agente:
 
 ![Perfil de uso de herramientas por configuración](docs/m3_tools.png)
 
-- **Perfil de uso de herramientas.** El agente **explora pero no ejecuta**:
-  domina `look`/`examine`, hace poco `take`, **casi nada de `use`** y **cero
-  `go`**. Como abrir la puerta requiere `use`, este perfil *es* la explicación
-  del 0/8 —y encaja con el modo `prosa_en_vez_de_tool`: describe el `use` en
-  texto en vez de emitirlo.
+- **Perfil de uso de herramientas.** El agente **explora pero rara vez
+  ejecuta**: domina `look`/`examine`, hace poco `take`, y en esta corrida
+  `use`=0 (react/gate) y `go`=0 en todos. Como abrir la puerta requiere `use`
+  (y los multi-sala requieren `go`), este perfil *es* la cara agregada del 0/8.
+  El mecanismo se ve en las trazas: en el punto de ejecutar, el agente
+  **describe la acción en prosa** en vez de emitirla —p. ej. escribe *"Haz uso
+  de la llave plateada en el cofre"* o *"`go(norte)`"* como texto, sin llamar la
+  herramienta. Es el mismo `prosa_en_vez_de_tool` visto desde el uso de tools.
+  **No es incapacidad:** en un smoke aislado el agente sí emitió
+  `use(llave, puerta)` y resolvió `study-with-key`; es **inconsistencia**, con
+  varianza entre corridas —otra razón para medir `pass^k` y no una sola corrida.
 - **Tasa de acción inválida** (`tool_errors/tool_calls`): `react` 0.0, `gate`
   0.0, `summarizer` 0.06. Baja en todos porque el agente apenas llega a
   intentar acciones que un gate rechazaría; el gate la mantiene en 0 por

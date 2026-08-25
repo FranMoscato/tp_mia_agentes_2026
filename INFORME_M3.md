@@ -359,8 +359,12 @@ estudio (los demás quedan fijos).
    política.
 3. **Planner explícito vs. ReAct** en `office-sequence` (goal compuesto/ordenado):
    el escenario premia descomponer y planificar el orden de sub-objetivos.
-4. **Más repeats y más modelos** para angostar los intervalos y separar límites
-   del framework de límites del modelo.
+4. **Más modelos y un modelo fuerte.** Ya corrimos con `--repeats 3` y con dos
+   modelos locales (`qwen2.5:3b`, `llama3.2`); el paso que falta es un modelo
+   capaz (`nova-lite`/`nova-pro` en Bedrock) que **sí** llame herramientas, para
+   separar de forma limpia los límites del framework de los del modelo y ver si
+   los efectos medidos (costo del resumen, limpieza del gate) persisten cuando la
+   accuracy deja de ser 0.
 
 ---
 

@@ -312,7 +312,8 @@ def report_md(summary: dict[str, Any], meta: dict[str, Any]) -> str:
     lines.append("")
     lines.append(f"- Fecha: {meta['timestamp']}")
     lines.append(f"- Módulo del agente: `{meta['module']}`")
-    lines.append(f"- Modelo: `{meta.get('bedrock_model_id')}` · perfil AWS: `{meta.get('aws_profile')}`")
+    lines.append(f"- Provider/modelo: `{meta.get('provider')}` / `{meta.get('model')}`"
+                 + (f" · perfil AWS: `{meta.get('aws_profile')}`" if meta.get('provider') == 'bedrock' else ""))
     lines.append(f"- Versión de prompt: `{meta.get('prompt_version')}` · commit: `{meta.get('git_commit')}`")
     lines.append(f"- max_iterations: {meta['max_iterations']} · repeats: {meta['repeats']}")
     lines.append(f"- Casos totales: {summary['n_cases']}")
@@ -606,12 +607,22 @@ def main(argv: list[str] | None = None) -> int:
                     )
 
     # Versionado (#14): sin esto, dos corridas de distintas máquinas/cuentas son
-    # indistinguibles. Grabamos modelo, cuenta/perfil, versión de prompt y commit.
+    # indistinguibles. Grabamos provider+modelo (el activo, respetando la misma
+    # precedencia que LLMClient.from_env: OLLAMA_HOST gana), cuenta/perfil,
+    # versión de prompt y commit.
+    if _env_value("OLLAMA_HOST"):
+        provider = "ollama"
+        model = _env_value("OLLAMA_MODEL") or "llama3.1"
+    else:
+        provider = "bedrock"
+        model = _env_value("BEDROCK_MODEL_ID")
     meta = {
         "timestamp": timestamp,
         "module": args.module,
         "max_iterations": args.max_iterations,
         "repeats": args.repeats,
+        "provider": provider,
+        "model": model,
         "bedrock_model_id": _env_value("BEDROCK_MODEL_ID"),
         "aws_profile": _env_value("AWS_PROFILE"),
         "aws_region": _env_value("AWS_REGION") or _env_value("AWS_DEFAULT_REGION"),

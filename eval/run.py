@@ -264,13 +264,18 @@ def run_one(
     scenario = load_scenario(scenario_path)
     world = scenario.initial_world
 
-    agent = module.build_agent(
-        {
-            "register_default_tools": False,
-            "max_iterations": max_iterations,
-            **config,
-        }
-    )
+    build_config: dict[str, Any] = {
+        "register_default_tools": False,
+        "max_iterations": max_iterations,
+        **config,
+    }
+    # Inyectamos el system prompt de la sala de escape (el default del agente es
+    # genérico). Si el módulo no lo expone, el config no lo fuerza.
+    escape_prompt = getattr(module, "ESCAPE_ROOM_SYSTEM_PROMPT", None)
+    if escape_prompt is not None and "system_prompt" not in build_config:
+        build_config["system_prompt"] = escape_prompt
+
+    agent = module.build_agent(build_config)
     for fn, schema in make_world_tools(world):
         agent.register_tool(fn, schema)
 

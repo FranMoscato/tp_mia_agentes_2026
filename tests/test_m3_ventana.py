@@ -178,7 +178,7 @@ def _mock_con_summarizer(turnos: int) -> MockLLMClient:
             "inventory": ["k1"],
             "current_location": "estudio",
             "visited_locations": ["estudio"],
-            "succesful_actions": ["mirar"],
+            "successful_actions": ["mirar"],
             "failed_actions": [],
             "observations": ["la llave k1 está en el estudio"],
             "known_exits": [],

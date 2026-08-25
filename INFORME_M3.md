@@ -270,25 +270,34 @@ frecuencia × costo, son un objetivo de primera —y quien los produce es el
 
 ### 3.4 Resultados cualitativos (LLM-as-judge)
 
-Calidad de exploración (1–5), sobre las trazas reales:
+Checklist binario de 3 criterios (§2.2), **judge = `llama3.2`, distinto del
+agente `qwen2.5:3b`**. El score es cuántos criterios se cumplen (0–3); la tasa de
+SÍ por criterio es lo diagnóstico.
 
-| Config | Casos puntuados | Promedio |
-|---|---:|---:|
-| `react` | 17/24 | **3.41**† |
-| `gate` | 18/24 | 3.33† |
-| `summarizer` | 19/24 | **2.63**† |
+| Config | Casos puntuados | Score (0–3) | ordenada | apoyadas | sin redundancia |
+|---|---:|---:|---:|---:|---:|
+| `react` | 24/24 | 0.96† | 0.00 | 0.12 | 0.83 |
+| `gate` | 24/24 | 1.00† | 0.08 | 0.12 | 0.79 |
+| `summarizer` | 23/24 | 0.96† | 0.13 | 0.22 | 0.61 |
 
 ![Calidad de exploración por configuración](docs/m3_judge.png)
 
-Hallazgo: el **`summarizer` produce trayectorias de menor calidad** (2.63 vs.
-3.41 de `react`), consistente con que loopea más (§3.3) —el resumen no solo
-cuesta más tiempo/tokens, sino que **empeora la trayectoria**. `react` y `gate`
-quedan parejos (~3.4): el gate no degrada la exploración.
+Los scores son **bajos** (~1/3) y el desglose por criterio es coherente con el
+modo de fallo: casi nunca hay **exploración ordenada** (0.00–0.13) ni **acciones
+apoyadas** en lo observado (0.12–0.22), pero sí **poca redundancia** (0.61–0.83)
+—porque el agente **abandona temprano** (prosa), no porque explore bien—. El
+`summarizer` es el único con algo más de redundancia (0.61 vs 0.79–0.83), lo que
+concuerda con que loopea más (§3.3).
 
-**Dato importante:** el judge solo puntuó **17–19/24** —en el resto,
-`qwen2.5:3b` no produjo salida estructurada válida. Es decir, **en un modelo
-chico hasta el judge es poco confiable**; por eso la meta-eval con kappa (§2.2)
-es la que valida sus números, y esperamos cobertura completa en Bedrock.
+**Sobre la confiabilidad del judge (honesto).** El `llama3.2` pudo puntuar
+**23–24/24** de las trazas; cuando el judge fue `qwen2.5:3b` (§3.5), solo pudo
+puntuar **9–12/24**. La lectura correcta **no** es "un judge distinto cura el
+self-preference" —eso es un sesgo de *puntaje*, que no medimos—, sino que
+**`llama3.2` es un judge más confiable para *emitir* el veredicto estructurado**
+(un modelo mejor en tool-calling). El self-preference (comparar puntajes de las
+mismas trazas bajo judge propio vs ajeno) y la capacidad real (kappa contra
+etiquetas humanas) **no los testeamos**: quedan como meta-eval pendiente (§5),
+idealmente con un judge fuerte (`nova-pro`) y el golden set etiquetado.
 
 ### 3.5 Comparación cross-modelo / proveedor
 
@@ -441,17 +450,17 @@ estudio (los demás quedan fijos).
 - **Óptimo como referencia de eficiencia.** El overhead es relativo al óptimo
   **derivado por búsqueda**; es una medida de eficiencia, no una afirmación de
   minimalidad absoluta (aunque coincide con el enunciado en los 8/8).
-- **Judge = LLM, y con dos fallas de diseño que reconocemos.** (1) **Mismo modelo
-  como agente y como judge** (`qwen2.5:3b`). La clase marca dos anti-patrones que
-  incurrimos: **self-preference** (el judge prefiere sus propias salidas → debería
-  ser *distinto del generador*) y **capacidad del judge = techo del eval** (un
-  judge tan débil como el evaluado se pierde los errores que él mismo cometería).
-  Nuestro judge solo pudo puntuar 17–19/24 —evidencia directa de ese techo—; lo
-  correcto es un judge **más capaz** que el agente (p. ej. `nova-pro` juzgando a
-  `nova-lite`). (2) **Escala ordinal 1–5** cuando la clase recomienda **binario por
-  defecto**: nuestras notas se **amontonaron en 3** (tendencia central), justo el
-  problema que el checklist binario evita. Además su confiabilidad depende del
-  kappa contra el golden set humano; un kappa bajo invalidaría sus números.
+- **Judge = LLM: dos anti-patrones que identificamos y corregimos, y lo que
+  queda.** Una primera versión usaba **el mismo modelo como agente y judge** y una
+  **escala ordinal 1–5** —dos anti-patrones de la clase (self-preference y
+  tendencia central; las notas se amontonaban en 3)—. Los **corregimos**: judge
+  **distinto** del agente (`llama3.2` juzga a `qwen`) y **checklist binario** (§2.2,
+  §3.4). *Lo que queda* como limitación honesta: (a) **capacidad del judge** — con
+  modelos locales chicos el judge no es *más capaz* que el agente, solo distinto;
+  lo correcto es un judge fuerte (`nova-pro` juzgando a `nova-lite`); (b) **no
+  medimos self-preference** (requiere comparar puntajes de las mismas trazas bajo
+  judge propio vs ajeno) **ni la kappa** contra etiquetas humanas del golden set.
+  Sin esa calibración, los puntajes del judge son indicativos, no confiables.
 - **Escala del dataset.** 8 escenarios: los intervalos de confianza son anchos.
   pass^k y Wilson lo hacen explícito, pero no lo eliminan.
 - **`max_iterations = 30` es del harness**, no del enunciado: lo subimos para que
@@ -473,10 +482,10 @@ estudio (los demás quedan fijos).
    separar de forma limpia los límites del framework de los del modelo y ver si
    los efectos medidos (costo del resumen, limpieza del gate) persisten cuando la
    accuracy deja de ser 0.
-5. **Arreglar el judge.** Usar un modelo **más capaz y distinto** del agente
-   (evita self-preference y sube el techo del eval), y **convertir la rúbrica
-   ordinal 1–5 en un checklist binario** de sub-criterios (más reproducible, sin
-   la tendencia central que vimos), calibrado con kappa contra el golden set.
+5. **Calibrar el judge.** Ya lo hicimos **distinto** del agente y con **checklist
+   binario**; falta lo más costoso: un judge **más capaz** (`nova-pro` en Bedrock)
+   para subir el techo del eval, y **etiquetar el golden set a mano** para medir la
+   **kappa** (y recién ahí confiar en sus puntajes).
 6. **Memoria más allá de la de trabajo (CoALA).** Hoy el agente usa solo
    **memoria de trabajo** (la ventana). Sumar memoria **episódica** (aprender
    entre escenarios: "en la sala anterior la llave estaba bajo la alfombra") o

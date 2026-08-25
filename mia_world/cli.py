@@ -91,8 +91,14 @@ def _cmd_run(args: argparse.Namespace) -> int:
             f"El módulo {args.module!r} no exporta `build_agent`."
         )
     # Agente "limpio": la sala de escape registra solo sus verbos
-    # (look/examine/take/use/go), sin las tools de M1 (calculadora, etc.).
-    agent = module.build_agent({"register_default_tools": False})
+    # (look/examine/take/use/go), sin las tools de M1 (calculadora, etc.), y con
+    # el system prompt específico de la sala de escape inyectado por config
+    # (el default del agente es genérico).
+    build_config: dict[str, Any] = {"register_default_tools": False}
+    escape_prompt = getattr(module, "ESCAPE_ROOM_SYSTEM_PROMPT", None)
+    if escape_prompt is not None:
+        build_config["system_prompt"] = escape_prompt
+    agent = module.build_agent(build_config)
     for fn, schema in make_world_tools(world):
         agent.register_tool(fn, schema)
 

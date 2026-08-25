@@ -13,7 +13,11 @@ from typing import Any
 from mia_agents.llm_client import LLMClient
 from mia_agents.protocols import Agent
 
-from .agent import MyAgent
+from .agent import (
+    ESCAPE_ROOM_SYSTEM_PROMPT,
+    ESCAPE_ROOM_SYSTEM_PROMPT_VERSION,
+    MyAgent,
+)
 
 
 def build_agent(config: dict[str, Any] | None = None) -> Agent:
@@ -50,6 +54,11 @@ def build_agent(config: dict[str, Any] | None = None) -> Agent:
     # "resumen on/off" se corre pasando use_summarizer por config.
     if "use_summarizer" in config:
         kwargs["use_summarizer"] = config["use_summarizer"]
+
+    # System prompt inyectable: el default de MyAgent es genérico (M1/M2). El
+    # runner de la sala de escape (M3) pasa ESCAPE_ROOM_SYSTEM_PROMPT por acá.
+    if "system_prompt" in config:
+        kwargs["system_prompt"] = config["system_prompt"]
 
     agent = MyAgent(**kwargs)
 

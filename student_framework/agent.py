@@ -63,11 +63,11 @@ def _es_error_transitorio(exc: Exception) -> bool:
     texto = f"{type(exc).__name__} {exc}".lower()
     return any(marca in texto for marca in _MARCADORES_TRANSITORIOS)
 
-SYSTEM_PROMPT = """
+ESCAPE_ROOM_SYSTEM_PROMPT = """
 
 Sos un agente que controla un personaje dentro de una sala de escape. Tu objetivo final es ABRIR LA PUERTA PRINCIPAL y salir de la habitación.
 
-**OBJETIVO FINAL Y PRONCIPAL: ** ABRIR LA PUERTA PRINCIPAL y salir de la habitación. 
+**OBJETIVO FINAL Y PRINCIPAL: ** ABRIR LA PUERTA PRINCIPAL y salir de la habitación.
 
 GOLDEN RULE: Continua hasta ABRIR LA PUERTA PRINCIPAL. Abrir otros contenedores como cofres o cajones no es cumplir tu objetivo.
 
@@ -302,6 +302,21 @@ Sin embargo, NO asumas que una llave sirve para una cerradura únicamente por su
 14. Si hay otras salidas debes explorar otros ambientes antes de intentar abrir la puerta. IMPORTANTE.
 """
 
+# Versión del prompt de la sala de escape (para versionar las corridas del eval).
+ESCAPE_ROOM_SYSTEM_PROMPT_VERSION = "escape-v1"
+
+
+# Prompt genérico por defecto (M1/M2): un asistente que usa herramientas. El
+# prompt específico de la sala de escape (ESCAPE_ROOM_SYSTEM_PROMPT) NO es el
+# default: lo inyecta el runner de M3 por config, para que una corrida de M1/M2
+# (p. ej. con la calculadora) no arranque "creyéndose" en una sala de escape.
+SYSTEM_PROMPT = (
+    "Sos un asistente que resuelve la tarea del usuario usando las "
+    "herramientas disponibles. Actuá paso a paso: llamá a las herramientas "
+    "que necesites y, cuando tengas la respuesta, respondé al usuario. No "
+    "inventes resultados de herramientas ni parámetros."
+)
+
 
 # ---------------------------------------------------------------------------
 # Summarizer de estado de partida (opcional, se activa con use_summarizer)
@@ -317,7 +332,7 @@ class GameState(BaseModel):
     inventory: list[str] = Field(default_factory=list)
     current_location: str | None = None
     visited_locations: list[str] = Field(default_factory=list)
-    succesful_actions: list[str] = Field(default_factory=list)
+    successful_actions: list[str] = Field(default_factory=list)
     failed_actions: list[str] = Field(default_factory=list)
     observations: list[str] = Field(default_factory=list)
     known_exits: list[str] = Field(default_factory=list)
@@ -333,7 +348,7 @@ SCHEMA DE 'ESTADO ACTUAL DE LA PARTIDA':
     -inventory: lista de objetos que tomamos (hay que agregarlos SOLO cuando la tool/function ´take´ se realiza con exito. NO agregues un objeto si solo se menciono como resultado de ´look´ o de ´examine´)
     -current_location: ubicacion actual
     -visited_locations: lugares que visitamos (devueltos por tool ´look´)
-    -succesful_actions: lista de tools ejecutadas en la partida con exito. (esto seria las tools que utilizamos y su resultado). Se deben aggregar elementos, pero no borrar los anteriores.
+    -successful_actions: lista de tools ejecutadas en la partida con exito. (esto seria las tools que utilizamos y su resultado). Se deben aggregar elementos, pero no borrar los anteriores.
     -failed_actions: lista de tools ejecutadas en la partida SIN exito. (esto seria las tools que utilizamos y su resultado). Se deben aggregar elementos, pero no borrar los anteriores.
     -observations: Objetos que sabemos que existen y donde estan
     -known_exits: salidas que se pueden tomar y desde donde
@@ -358,7 +373,7 @@ MEMORY_SYSTEM_PROMPT = """
         -inventory: lista de objetos que tomamos (hay que agregarlos SOLO cuando la tool/function ´take´ se realiza con exito. NO agregues un objeto si solo se menciono como resultado de ´look´ o de ´examine´)
         -current_location: ubicacion actual
         -visited_locations: lugares que visitamos (devueltos por tool ´look´)
-        -succesful_actions: lista de tools ejecutadas en la partida con exito. (esto seria las tools que utilizamos y su resultado). Se deben aggregar elementos, pero no borrar los anteriores.
+        -successful_actions: lista de tools ejecutadas en la partida con exito. (esto seria las tools que utilizamos y su resultado). Se deben aggregar elementos, pero no borrar los anteriores.
         -failed_actions: lista de tools ejecutadas en la partida SIN exito. (esto seria las tools que utilizamos y su resultado). Se deben aggregar elementos, pero no borrar los anteriores.
         -observations: Objetos que sabemos que existen y donde estan
         -known_exits: salidas que se pueden tomar y desde donde

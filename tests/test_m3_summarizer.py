@@ -19,10 +19,33 @@ from mia_agents.testing import MockLLMClient
 from mia_agents.tool_schema import FINAL_RESULT_TOOL_NAME
 from mia_agents.types import LLMResponse, ToolCall, ToolSchema
 
-from student_framework import build_agent
+from student_framework import ESCAPE_ROOM_SYSTEM_PROMPT, build_agent
 
 # Sin espera entre reintentos para tests rápidos.
 _SIN_BACKOFF = {"retry_backoff_base": 0}
+
+
+def _mock():
+    return MockLLMClient([LLMResponse(content="x")])
+
+
+def test_default_system_prompt_no_es_de_sala_de_escape() -> None:
+    """M1/M2: el default es un asistente genérico, NO la sala de escape.
+
+    Regresión de #7: el prompt de escape no debe ser el default de MyAgent
+    (una corrida de M1/M2 no debe arrancar "creyéndose" en una sala de escape).
+    """
+    agent = build_agent({"llm_client": _mock()})
+    assert "sala de escape" not in agent._system
+    assert agent._system.startswith("Sos un asistente")
+
+
+def test_system_prompt_de_escape_se_inyecta_por_config() -> None:
+    """M3: el runner inyecta ESCAPE_ROOM_SYSTEM_PROMPT por config."""
+    agent = build_agent(
+        {"llm_client": _mock(), "system_prompt": ESCAPE_ROOM_SYSTEM_PROMPT}
+    )
+    assert "sala de escape" in agent._system
 
 
 def _tool_mirar():
@@ -71,7 +94,7 @@ def test_summarizer_on_invoca_memoria_inyecta_estado_y_cuenta_tokens() -> None:
             "inventory": ["llave"],
             "current_location": "sala",
             "visited_locations": ["sala"],
-            "succesful_actions": ["mirar"],
+            "successful_actions": ["mirar"],
             "failed_actions": [],
             "observations": ["hay una llave en la sala"],
             "known_exits": [],

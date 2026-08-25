@@ -562,12 +562,20 @@ def run_one(
     # lo fijamos ANTES de la inyección del prompt de sala de escape, de modo que
     # esta última no lo pise. `prompt_version` queda registrado POR CASO (no solo
     # en el meta global) para que la ablación sea auto-documentada.
+    #
+    # Los valores de `prompt_version` son TAGS de versión (identificadores para el
+    # versionado que pide la clase), definidos así:
+    #   - "escape-v1"     : prompt ESPECIALIZADO de sala de escape (~200 líneas de
+    #                       reglas: orden look/examine/take/use/go, no inventar IDs,
+    #                       no prosa). Es ESCAPE_ROOM_SYSTEM_PROMPT en agent.py.
+    #   - "generico-v1"   : prompt GENÉRICO de M1/M2 ("sos un asistente que usa
+    #                       herramientas", sin reglas del dominio). Es SYSTEM_PROMPT.
     prompt_version: str | None = None
     if build_config.pop("prompt_generico", False):
         generico = getattr(module, "SYSTEM_PROMPT", None)
         if generico is not None:
             build_config["system_prompt"] = generico
-        prompt_version = "generico"
+        prompt_version = "generico-v1"  # prompt genérico de M1/M2 (sin dominio)
 
     # Inyectamos el system prompt de la sala de escape (el default del agente es
     # genérico). Si el módulo no lo expone, el config no lo fuerza.

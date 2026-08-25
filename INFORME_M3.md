@@ -563,12 +563,15 @@ despegar la accuracy—.
 
 ### 4.3 Experimento 3 — Estrategia de prompting (escape-v1 vs. genérico)
 
-- **Qué cambiamos.** `react` usa el prompt especializado `escape-v1` (~200 líneas
-  de reglas de sala de escape) vs. `react_generico`, que usa el **prompt genérico
-  de M1/M2** ("sos un asistente que usa herramientas"). `--configs
-  react,react_generico`. Corrida **acotada** (4 escenarios, `--repeats 1`,
-  `--max-iterations 12`) para no colgar el proveedor local; ambos brazos son
-  idénticos salvo el prompt (comparación apareada).
+- **Qué cambiamos.** `react` usa el prompt **especializado** de sala de escape
+  (~200 líneas: orden `look`/`examine`/`take`/`use`/`go`, no inventar IDs, no
+  responder en prosa) vs. `react_generico`, que usa el prompt **genérico de M1/M2**
+  ("sos un asistente que usa herramientas", sin reglas del dominio). `--configs
+  react,react_generico`. En `cases.jsonl` cada caso registra qué prompt usó en el
+  campo `prompt_version` (**`escape-v1`** = especializado; **`generico-v1`** =
+  genérico). Corrida **acotada** (4 escenarios, `--repeats 1`, `--max-iterations
+  12`) para no colgar el proveedor local; ambos brazos son idénticos salvo el
+  prompt (comparación apareada).
 - **Hipótesis.** `escape-v1` está lleno de reglas anti-prosa ("emití `tool_calls`,
   no texto"), así que debería **reducir** `prosa_en_vez_de_tool`, el modo dominante.
 - **Qué miramos.** Perfil de fallo (prosa vs. otros), cantidad de tool-calls,

@@ -302,7 +302,11 @@ Sin embargo, NO asumas que una llave sirve para una cerradura únicamente por su
 14. Si hay otras salidas debes explorar otros ambientes antes de intentar abrir la puerta. IMPORTANTE.
 """
 
-# Versión del prompt de la sala de escape (para versionar las corridas del eval).
+# Tag de versión del prompt de sala de escape, para versionar las corridas del
+# eval (la clase: "el prompt es código, se versiona"). "escape-v1" identifica el
+# prompt ESPECIALIZADO de arriba (reglas del dominio: orden de acciones, no
+# inventar IDs, no responder en prosa). La ablación de prompt (eval/run.py, exp.
+# #3) lo compara contra "generico-v1" = SYSTEM_PROMPT (el asistente genérico).
 ESCAPE_ROOM_SYSTEM_PROMPT_VERSION = "escape-v1"
 
 

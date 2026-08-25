@@ -118,8 +118,24 @@ cada métrica viaja con su dispersión (pass^k, IC de Wilson, repeats).
 | **Accuracy** (con **IC de Wilson 95%**) | Fracción de casos resueltos | Es la medida directa de éxito. Reportamos el intervalo de Wilson porque *"una corrida no es una medición"*: con 8 escenarios y pocos repeats, el intervalo es más honesto que un puntaje pelado (y Wilson se porta mejor que la normal cerca de 0/1). |
 | **pass^k** | Resolver el escenario en **todos** los k intentos | El agente actúa **sin supervisión**, así que lo relevante no es "alguna vez lo logró" sino "lo logra de forma consistente". pass^k castiga la varianza que la accuracy promedio esconde. |
 | **Overhead vs. óptimo** | `tool_calls / óptimo`, sobre los resueltos | Mide **eficiencia**: cuánto se aleja del camino ideal. El óptimo **no se hardcodea**: se **deriva por BFS** sobre el grafo de estados ([`eval/optimal.py`](eval/optimal.py)), y coincide con el enunciado en los 8/8 escenarios (cross-validación). |
-| **Costo por caso resuelto** | Tokens totales (incl. fallidos) / resueltos | El costo relevante es *"cuánto cuesta un éxito"*, no el promedio por corrida: un agente que falla barato no es más barato si nunca resuelve. Separamos tokens de **agente** vs. **summarizer**. |
+| **Tokens por caso resuelto** | Tokens totales (incl. fallidos) / resueltos | El costo relevante es *"cuánto cuesta un éxito"*, no el promedio por corrida: un agente que falla barato no es más barato si nunca resuelve. Lo medimos en **tokens** (moneda independiente del proveedor) porque con Ollama el costo en USD es $0; el USD es un derivado directo que se "enciende" solo al correr con un proveedor pago (Bedrock). Separamos tokens de **agente** vs. **summarizer**. |
 | **Latencia p50 / p95** | Percentiles de wall-clock por caso | La clase es explícita: *"nunca promedio"*. Los percentiles muestran la cola (p95), que es donde vive la mala experiencia. |
+
+**Qué significa "óptimo derivado por BFS".** El overhead se mide contra un óptimo
+que no copiamos del enunciado: lo buscamos. Cada arista del grafo de estados del
+mundo es una tool-call y el óptimo es el camino más corto desde el estado inicial
+hasta uno que cumple `check_goal`. El siguiente diagrama es ese grafo para
+`study-with-key` (reusa la BFS real de [`eval/optimal.py`](eval/optimal.py) sobre
+`make_world_tools`):
+
+![Grafo de estados de study-with-key con el óptimo del BFS resaltado](docs/m3_grafo_estados.png)
+
+El camino azul (`examine alfombra` → `take llave_oro` → `use` = 3 acciones) es el
+óptimo; las ramas grises son estados que la búsqueda explora y descarta. El
+escritorio es un **señuelo** (cajones vacíos): re-examinarlo no acerca al
+objetivo. Esa exploración descartada es exactamente la *redundancia evitable* que
+penaliza el overhead-vs-óptimo y que puntúa el judge (§2.2). El BFS coincide con
+el enunciado en los 8/8 escenarios, así que la métrica queda cross-validada.
 
 ### 2.2 Dimensión cualitativa (LLM-as-judge)
 
@@ -375,6 +391,14 @@ resuelto (`cost_usd_*` en el `summary.json`), usando el pricing on-demand del
 modelo —$0 para modelos locales como `qwen2.5:3b`, y con precio real en Bedrock
 (`nova-lite`), donde el sobrecosto del resumen se traduce directamente en
 dólares.†
+
+Los **tokens por caso resuelto** son la métrica más honesta de eficiencia, pero
+exigen que haya éxitos: en la corrida canónica (`qwen2.5:3b`, 0/8) quedan
+**indefinidos** (división por cero) —lo cual, en sí, dice algo: no hay eficiencia
+que medir si nunca se resuelve—. El único punto con éxitos en todo el barrido es
+`llama3.2 + summarizer` (2/24), donde da **162.824 tokens por éxito**: un número
+enorme que muestra el precio real de "arrancar a resolver" con un modelo chico.
+Es justamente la métrica que se vuelve central con un modelo capaz en Bedrock.
 
 ---
 

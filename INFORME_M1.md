@@ -4,6 +4,12 @@
 **Entrega:** Milestone 1
 **Código:** `student_framework/`
 
+> **Serie — el hilo del escape room.** Tres milestones hacia un agente que
+> **juega y se evalúa en una sala de escape** (*gamification* como banco de
+> pruebas): **M1 ▸ el agente y sus herramientas** · [M2](INFORME_M2.md) ▸ memoria
+> y robustez · [M3](INFORME_M3.md) ▸ evaluación en el juego. Índice:
+> [INFORMES.md](INFORMES.md).
+
 ---
 
 ## Índice
@@ -29,6 +35,12 @@
 El objetivo del M1 es un agente que registra herramientas, las expone al LLM,
 ejecuta las que el modelo pide, observa los resultados y continúa hasta producir
 una respuesta final, sin bucles infinitos.
+
+Acá las herramientas son genéricas (calculadora, lector de archivos, contador de
+palabras), pero es **el mismo mecanismo** con el que el agente jugará la sala de
+escape en M3: registrar verbos (`look`/`examine`/`take`/`use`/`go`) y dejar que
+el LLM los orqueste en el loop ReAct. M1 construye ese motor; el juego —y su
+evaluación— llegan en M3.
 
 **Mapa de archivos (lo que implementamos vs. lo que es fijo):**
 

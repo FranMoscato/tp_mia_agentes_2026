@@ -17,6 +17,10 @@ Los requisitos formales de cada entrega están separados por milestone:
 [`ENUNCIADO_M2.md`](../ENUNCIADO_M2.md) y
 [`ENUNCIADO_M3.md`](../ENUNCIADO_M3.md).
 
+Los **informes** de las tres entregas se leen como una serie (mismo diseño e
+hilo conductor: la sala de escape como banco de pruebas). Índice:
+[`INFORMES.md`](../INFORMES.md).
+
 
 ## Estructura del repositorio
 ```

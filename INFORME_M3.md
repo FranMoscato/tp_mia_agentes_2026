@@ -1,5 +1,11 @@
 # Informe — Milestone 3: Evaluación sobre salas de escape
 
+> **Serie — el hilo del escape room.** Tres milestones hacia un agente que
+> **juega y se evalúa en una sala de escape** (*gamification* como banco de
+> pruebas): [M1](INFORME_M1.md) ▸ el agente y sus herramientas · [M2](INFORME_M2.md)
+> ▸ memoria y robustez · **M3 ▸ evaluación en el juego**. Índice:
+> [INFORMES.md](INFORMES.md).
+
 > **Estado del documento.** Las 5 secciones están completas con datos reales de
 > una corrida local (`ollama` / `qwen2.5:3b`, 8 escenarios × 3 configs × **3
 > repeats** = 72 casos). Marcamos con `†` los números que se refrescan con la

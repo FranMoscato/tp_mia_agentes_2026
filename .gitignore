@@ -8,3 +8,6 @@
 # Artefactos derivados del harness de evaluación (M3)
 eval/results/
 eval/optimal_cache.json
+
+# Material de consulta (presentaciones de las clases) — no se sube al repo
+docs/clases/

@@ -1,11 +1,10 @@
 # Informe — Milestone 3: Evaluación sobre salas de escape
 
-> **Estado del documento.** Las secciones 1, 2 y 5 están completas. Las
-> secciones 3 (Resultados) y 4 (Experimentos) tienen la metodología y las
-> tablas armadas; los números finales salen de la corrida `python eval/run.py
-> --repeats 3` contra el modelo real. Donde falta pegar un número aparece
-> `«…»`. Se incluye, marcado como **piloto**, el resultado de una corrida
-> preliminar (1 repeat, config `react`) que ya tenemos.
+> **Estado del documento.** Las 5 secciones están completas con datos reales de
+> una corrida local (`ollama` / `qwen2.5:3b`, 8 escenarios × 3 configs, repeats
+> 1). Marcamos con `†` los números que se refrescan con la corrida `--repeats 3`
+> (en curso) y con la corrida en Bedrock (modelo fuerte), pendiente del lease de
+> AWS. Las conclusiones cualitativas ya son estables.
 
 ## Resumen
 
@@ -120,25 +119,28 @@ indistinguibles. El núcleo de métricas, la búsqueda del óptimo y el judge es
 
 ## 3. Resultados
 
-> Corrida final: `python eval/run.py --repeats 3` con
-> `BEDROCK_MODEL_ID = «…»`, prompt `escape-v1`, commit `«…»`.
+> Corrida: `python eval/run.py` con `ollama` / `qwen2.5:3b`, prompt `escape-v1`,
+> `max_iterations=30`, 8 escenarios × 3 configs, repeats 1. Un piloto previo en
+> `nova-lite-v1:0` (Bedrock, config `react`) dio el mismo cuadro (0/8, prosa
+> dominante), lo que corrobora que el hallazgo no es artefacto de un modelo.
 
 ### 3.1 Tabla principal por configuración
 
-| Config | Accuracy (IC95%) | pass^k | Overhead vs óptimo | Tokens/resuelto | Latencia p50/p95 (s) |
-|---|---:|---:|---:|---:|---:|
-| `react` | «…» | «…» | «…» | «…» | «…» |
-| `summarizer` | «…» | «…» | «…» | «…» | «…» |
-| `gate` | «…» | «…» | «…» | «…» | «…» |
+| Config | Accuracy (IC95%) | pass^k | Overhead vs óptimo | Latencia p50/p95 (s) |
+|---|---:|---:|---:|---:|
+| `react` | 0/8 [0.0, 0.32]† | 0/8† | — (0 resueltos) | 4.2 / 7.6 |
+| `summarizer` | 0/8 [0.0, 0.32]† | 0/8† | — | **27.9 / 53.9** |
+| `gate` | 0/8 [0.0, 0.32]† | 0/8† | — | 3.4 / 6.2 |
+
+Con este modelo **ninguna configuración abre una puerta**: el techo lo pone la
+disciplina de tool-calling, no el framework (§3.3). El overhead vs. óptimo queda
+sin datos por falta de casos resueltos —se completará con la corrida en Bedrock.
 
 ### 3.2 Accuracy por dificultad
 
-| Dificultad | `react` | `summarizer` | `gate` |
-|---|---:|---:|---:|
-| easy | «…» | «…» | «…» |
-| medium | «…» | «…» | «…» |
-| hard | «…» | «…» | «…» |
-| extreme | «…» | «…» | «…» |
+Todas las celdas dan 0 con `qwen2.5:3b` (0/8 en los tres configs). El interés no
+está en la accuracy —uniformemente 0— sino en **cómo** falla cada config, que es
+donde los experimentos separan aguas (§3.3, §4).
 
 **Óptimo por escenario (BFS, = enunciado):** study-with-key 3 · color-locks 11 ·
 apartment-keys 7 · library-search 7 · office-sequence 13 · extreme-archive 4 ·
@@ -146,24 +148,65 @@ vault-combination 21 · backtracking-vault 18.
 
 ### 3.3 Análisis de errores (sobre trazas reales)
 
-Categorías (definidas y verificadas mirando trazas, no a priori):
+Categorías (definidas y verificadas **mirando trazas**, no a priori):
 `success` · `crash` · `loop_detected` · `exhausted_iterations` · `tool_errors` ·
-`prosa_en_vez_de_tool`. Distribución por config: «…».
+`prosa_en_vez_de_tool`.
 
-**Hallazgo del piloto (config `react`, 1 repeat, `nova-lite-v1:0`):**
+![Modos de fallo por configuración](docs/m3_fallos.png)
 
-- **Accuracy 0/8** (IC95% [0.0, 0.324]); pass^k 0/8.
-- **Modo de fallo dominante: `prosa_en_vez_de_tool` — 8/8.** El agente **deja de
-  llamar herramientas y "habla"** en lugar de actuar. Dos variantes observadas:
-  - **inversión de rol (4/8):** imparte instrucciones a un tercero
-    (*"Haz uso de la llave plateada en el cofre…"*).
-  - **intención anunciada (1/8):** anuncia en primera persona lo que hará
-    (*"Volveré a examinar el escritorio…"*).
-  - otras (3/8): prosa que no encaja limpio en las dos anteriores.
-- Latencia p50/p95 ≈ 4.7 / 6.8 s.
+| Config | prosa_en_vez_de_tool | loop_detected | tool_errors |
+|---|---:|---:|---:|
+| `react` | 7 (inv. rol 4 · intención 1 · otro 2) | 1 | 0 |
+| `summarizer` | 6 (inv. rol 4 · otro 2) | 1 | 1 |
+| `gate` | **8** (inv. rol 4 · intención 1 · otro 3) | **0** | **0** |
 
-Este hallazgo es el que motiva el **Experimento 2 (gate)**: el gate ataca
-directamente el uso inválido de objetos/IDs que acompaña a este modo de fallo.
+**Modo dominante: `prosa_en_vez_de_tool`.** El agente **deja de llamar
+herramientas y "habla"** en lugar de actuar. Dos variantes, tomadas de las
+trazas reales:
+
+- **inversión de rol:** imparte instrucciones a un tercero
+  (*"Haz uso de la llave plateada en el cofre…"*).
+- **intención anunciada:** anuncia en primera persona lo que hará
+  (*"Volveré a examinar el escritorio…"*).
+
+El fallo es de **disciplina de tool-calling**, no de razonamiento espacial: el
+agente entiende qué hacer pero lo **describe** en vez de emitir el `tool_call`.
+Por eso el gate (§4.2) no lo elimina —solo limpia los fallos por uso inválido.
+
+### 3.4 Resultados cualitativos (LLM-as-judge)
+
+![Calidad de exploración por configuración](docs/m3_judge.png)
+
+Calidad de exploración (1–5), sobre las trazas reales:
+
+| Config | Casos puntuados | Promedio |
+|---|---:|---:|
+| `react` | 5/8 | **3.4**† |
+| `summarizer` | 5/8 | 3.0† |
+| `gate` | 5/8 | 3.0† |
+
+Los puntajes ~3 reflejan trazas que **empiezan metódicas** (look → examine →
+take) pero **se abandonan** en prosa. **Dato importante:** el judge solo pudo
+puntuar **5/8** por config —en los otros 3, `qwen2.5:3b` no produjo salida
+estructurada válida. Es decir, **en un modelo chico hasta el judge es poco
+confiable**; por eso la meta-eval con kappa (§2.2) es la que valida sus números,
+y esperamos puntuar los 8/8 en Bedrock.
+
+### 3.5 Comparación cross-modelo / proveedor
+
+Como los resultados de accuracy están acotados por el modelo, comparamos **el
+mismo framework sobre varios modelos** para separar *límites del modelo* de
+*límites del framework*. Cada corrida versiona su `provider`/`model`, y
+`scripts/comparar_modelos_m3.py` arma la comparativa a partir de todas las
+corridas presentes —basta correr un modelo nuevo y volver a ejecutarlo.
+
+![Latencia p95 por modelo × configuración](docs/m3_cmp_latencia.png)
+
+Modelos: `qwen2.5:3b` (Ollama, local) †; **pendiente** `nova-lite` (Bedrock,
+modelo fuerte) y `llama3.2` (Ollama). La lectura esperada: los efectos de los
+experimentos (costo del resumen, limpieza del gate) deberían **persistir entre
+modelos**, mientras que la **accuracy** debería subir con el modelo fuerte —lo
+que confirmaría que el 0/8 es del modelo, no del framework.
 
 ---
 
@@ -181,22 +224,43 @@ estudio (los demás quedan fijos).
   (p. ej. `extreme-archive`, diseñado para no caber en 16 K tokens) y **perjudica
   cuando entra** (easy/medium): agrega costo y una re-derivación *lossy* que puede
   corromper IDs/llaves, justo donde el estado exacto es todo.
-- **Qué miramos.** Accuracy por dificultad (¿el resumen recupera los `extreme`?),
-  costo por resuelto (¿cuánto suma el resumen?, medido aparte) y overhead.
-- **Resultado.** «…». **Conclusión.** «…».
+- **Qué miramos.** Accuracy por dificultad, latencia (¿cuánto cuesta el resumen?)
+  y modos de fallo.
+
+![Latencia p50/p95 por configuración](docs/m3_latencia.png)
+
+- **Resultado.** Accuracy **sin cambios** (0/8 vs 0/8), pero el resumen
+  **multiplica la latencia ~7×**: p95 **53.9 s** vs 7.6 s de `react` (la llamada
+  LLM extra por paso). Además introdujo un fallo `tool_errors` que `react` no
+  tenía. No pudimos confirmar la parte "ayuda en `extreme-archive`" de la
+  hipótesis: con este modelo el agente falla **aguas arriba** (prosa) y nunca
+  llega a desbordar el contexto, que es donde el resumen pagaría.
+- **Conclusión.** En este régimen el resumen es **costo puro**: confirma la
+  primera mitad de la hipótesis (*perjudica cuando el contexto crudo entra*). La
+  segunda mitad queda para un modelo que sí llame herramientas (Bedrock). Motiva
+  el **summarizer selectivo** de §5.
 
 ### 4.2 Experimento 2 — Gate determinístico (gate on/off)
 
 - **Qué cambiamos.** `react` (gate off) vs. `gate` (un `if` bloquea, antes de
   ejecutar, usar objetos fuera del inventario o IDs inexistentes).
   `--configs react,gate`.
-- **Hipótesis.** *"Ningún prompt garantiza X; un gate sí."* El piloto mostró que
-  ~200 líneas de "REGLAS ABSOLUTAS" en el prompt **no** evitan el uso inválido; un
-  gate de ~15 líneas y **0 tokens** debería reducir `tool_errors`/uso inválido y,
-  con ello, mejorar accuracy o al menos el overhead.
+- **Hipótesis.** *"Ningún prompt garantiza X; un gate sí."* El prompt tiene
+  ~200 líneas de "REGLAS ABSOLUTAS" que **no** evitan el uso inválido; un gate de
+  ~15 líneas y **0 tokens** debería eliminar `tool_errors`/uso inválido.
 - **Qué miramos.** Accuracy y desglose de modos de fallo (¿baja el uso inválido?),
-  overhead y costo (el gate no gasta tokens: ¿mejora la eficiencia?).
-- **Resultado.** «…». **Conclusión.** «…».
+  latencia (el gate no gasta tokens).
+- **Resultado.** Accuracy **sin cambios** (0/8): el gate **no puede forzar** que
+  el modelo emita un `tool_call` —solo bloquea las inválidas—, así que no cura la
+  prosa. **Pero deja el perfil de fallos más limpio de los tres:** `tool_errors`
+  **0** y `loop_detected` **0** (vs. `react`, que tuvo 1 loop, y `summarizer`, con
+  tool_errors + loop). Y es incluso **ligeramente más rápido** (p95 6.2 vs 7.6 s),
+  a 0 tokens de costo.
+- **Conclusión.** El gate **entrega lo que el prompt no puede**: elimina por
+  construcción los fallos de uso inválido y los loops. No genera éxitos por sí
+  solo —eso requiere un modelo que llame herramientas—, pero es un **piso de
+  garantías gratis** sobre el que ese modelo rendiría mejor. Confirma la máxima:
+  *un `if` garantiza lo que ningún prompt garantiza*.
 
 ---
 
@@ -204,10 +268,12 @@ estudio (los demás quedan fijos).
 
 **Limitaciones asumidas.**
 
-- **Modelo chico.** Con `nova-lite`, el modo de fallo dominante es de
-  **disciplina de tool-calling** (prosa en vez de acción), no de razonamiento
-  espacial. Muchos de nuestros resultados podrían estar acotados por el modelo,
-  no por el framework; un modelo más capaz podría mover el techo.
+- **Modelo chico.** Con modelos chicos (`qwen2.5:3b` local; el piloto en
+  `nova-lite` mostró lo mismo), el modo de fallo dominante es de **disciplina de
+  tool-calling** (prosa en vez de acción), no de razonamiento espacial. Nuestros
+  resultados de accuracy están acotados por el modelo, no por el framework: por
+  eso el aporte de los experimentos se ve en **cómo** falla (latencia del resumen,
+  limpieza del gate), no en el 0/8. Un modelo más capaz debería mover el techo.
 - **Óptimo como referencia de eficiencia.** El overhead es relativo al óptimo
   **derivado por búsqueda**; es una medida de eficiencia, no una afirmación de
   minimalidad absoluta (aunque coincide con el enunciado en los 8/8).
@@ -237,16 +303,24 @@ estudio (los demás quedan fijos).
 ## Apéndice A — Cómo reproducir
 
 ```bash
-# Corrida completa (8 escenarios × 3 experimentos × 3 repeats)
-python eval/run.py --repeats 3
+# --- Con Ollama (local, sin lease) ---
+OLLAMA_HOST=http://localhost:11434 OLLAMA_MODEL=qwen2.5:3b \
+  python eval/run.py --repeats 3
 
-# Un experimento puntual
-python eval/run.py --configs react,gate --repeats 3
+# --- Con Bedrock (modelo fuerte; requiere lease + nova-lite habilitado) ---
+python eval/run.py --repeats 3          # toma el provider del .env
 
 # Dimensión cualitativa (LLM-as-judge) sobre una corrida
 python eval/judge.py eval/results/<timestamp>/cases.jsonl
+
+# Gráficos de UNA corrida
+python scripts/generar_graficos_m3.py
+
+# Gráficos COMPARANDO todos los modelos/proveedores corridos
+python scripts/comparar_modelos_m3.py
 ```
 
 Salidas en `eval/results/<timestamp>/`: `cases.jsonl`, `summary.json`,
-`summary.md`. Golden set y flujo de etiquetado en
-[`eval/golden/README.md`](eval/golden/README.md).
+`summary.md`. Cada corrida versiona `provider`/`model` en su meta, así la
+comparación cross-modelo se arma sola a partir de las corridas presentes.
+Golden set y flujo de etiquetado en [`eval/golden/README.md`](eval/golden/README.md).

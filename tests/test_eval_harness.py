@@ -31,6 +31,8 @@ def _case(**kw):
         "goal_achieved": False,
         "crashed": False,
         "tool_calls": 3,
+        "llm_calls": 4,
+        "steps": [],
         "tool_error_count": 0,
         "agent_input_tokens": 100,
         "agent_output_tokens": 50,
@@ -54,7 +56,42 @@ def test_categorize_crash() -> None:
 
 
 def test_categorize_exhausted_iterations() -> None:
-    assert eval_run.categorize(_case(tool_calls=30), 30) == "exhausted_iterations"
+    """El tope se mide en llamadas al LLM, no en tool-calls.
+
+    Regresión: comparar `tool_calls >= max_iterations` hacía la categoría
+    inalcanzable, porque el bucle limita llamadas al LLM y con una tool por
+    respuesta `tool_calls` se queda siempre en `max_iterations - 1`.
+    """
+    assert eval_run.categorize(_case(llm_calls=30, tool_calls=29), 30) == "exhausted_iterations"
+
+
+def test_categorize_no_exhausted_por_tool_calls() -> None:
+    """Muchas tool-calls pero sin agotar el presupuesto de llamadas: no es exhausted."""
+    caso = _case(llm_calls=12, tool_calls=30, tool_error_count=0)
+    assert eval_run.categorize(caso, 30) == "wrong_path"
+
+
+def test_categorize_loop_detected() -> None:
+    """Tres tool-calls idénticas seguidas se clasifican como loop."""
+    steps = [{"tool_name": "examine", "tool_input": '{"target": "cofre"}'} for _ in range(3)]
+    assert eval_run.categorize(_case(steps=steps), 30) == "loop_detected"
+
+
+def test_categorize_loop_tiene_prioridad_sobre_exhausted() -> None:
+    """El loop es la causa; agotar iteraciones, la consecuencia."""
+    steps = [{"tool_name": "use", "tool_input": '{"item": "k1", "target": "p1"}'} for _ in range(5)]
+    caso = _case(steps=steps, llm_calls=30)
+    assert eval_run.categorize(caso, 30) == "loop_detected"
+
+
+def test_look_repetido_intercalado_no_es_loop() -> None:
+    """`look` tras cada `go` es exploración legítima en multi-sala, no un loop."""
+    steps = []
+    for direccion in ("norte", "sur", "este", "oeste"):
+        steps.append({"tool_name": "look", "tool_input": "{}"})
+        steps.append({"tool_name": "go", "tool_input": f'{{"direction": "{direccion}"}}'})
+    assert eval_run.repeticiones_consecutivas(steps) == 1
+    assert eval_run.categorize(_case(steps=steps), 30) == "wrong_path"
 
 
 def test_categorize_tool_errors() -> None:
@@ -72,7 +109,8 @@ def test_categorize_wrong_path() -> None:
 def test_summarize_accuracy_y_breakdown() -> None:
     cases = [
         _case(config="react", goal_achieved=True, tool_calls=3, optimal_calls=3),
-        _case(config="react", difficulty="hard", goal_achieved=False, tool_calls=30),
+        _case(config="react", difficulty="hard", goal_achieved=False,
+              tool_calls=29, llm_calls=30),
         _case(config="summarizer", goal_achieved=True, tool_calls=6, optimal_calls=3,
               memory_input_tokens=40, memory_output_tokens=20),
     ]
@@ -100,7 +138,8 @@ def test_summarize_accuracy_y_breakdown() -> None:
 def test_summarize_accuracy_por_dificultad() -> None:
     cases = [
         _case(config="react", difficulty="easy", goal_achieved=True),
-        _case(config="react", difficulty="hard", goal_achieved=False, tool_calls=10),
+        _case(config="react", difficulty="hard", goal_achieved=False,
+              tool_calls=10, llm_calls=11),
     ]
     by_diff = eval_run.summarize(cases, 30)["by_config"]["react"]["by_difficulty"]
     assert by_diff["easy"]["accuracy"] == 1.0
@@ -151,3 +190,13 @@ def test_bfs_optimo_coincide_con_enunciado() -> None:
         assert opt == _ENUNCIADO_FAST[sc.id], (
             f"{sc.id}: BFS={opt} != enunciado={_ENUNCIADO_FAST[sc.id]}"
         )
+
+
+def test_report_md_sin_casos_resueltos() -> None:
+    """Sin resueltos no hay overhead que reportar: se rinde como "—", no "Nonex"."""
+    summary = eval_run.summarize([_case(config="react", goal_achieved=False)], 30)
+    meta = {"timestamp": "20260825-000000", "module": "student_framework",
+            "max_iterations": 30, "repeats": 1}
+    md = eval_run.report_md(summary, meta)
+    assert "Nonex" not in md
+    assert "—" in md

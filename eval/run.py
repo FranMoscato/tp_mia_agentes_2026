@@ -75,21 +75,59 @@ DEFAULT_MAX_ITERATIONS = 30
 # ---------------------------------------------------------------------------
 
 
+# Cuántas tool-calls idénticas CONSECUTIVAS (misma tool + mismos argumentos)
+# cuentan como loop. Repetir `look` es legítimo en los escenarios multi-sala
+# —va intercalado con `go`—, por eso exigimos que sean consecutivas y no un
+# simple conteo global.
+LOOP_THRESHOLD = 3
+
+
+def repeticiones_consecutivas(steps: list[dict[str, Any]]) -> int:
+    """Racha más larga de tool-calls idénticas seguidas (tool + argumentos).
+
+    Es la señal de loop de la clase 7: "repetición de la firma tool +
+    argumentos". Se calcula sobre el trace, que es donde el modo de fallo es
+    visible — una eval de output final no lo ve, porque el caso nunca llega a
+    producir output.
+    """
+    mejor = actual = 0
+    anterior = None
+    for step in steps:
+        firma = (step.get("tool_name"), str(step.get("tool_input")))
+        actual = actual + 1 if firma == anterior else 1
+        anterior = firma
+        mejor = max(mejor, actual)
+    return mejor
+
+
 def categorize(case: dict[str, Any], max_iterations: int) -> str:
     """Clasifica el resultado de una corrida en un modo de fallo (o éxito).
 
     Categorías:
       - success              — se abrió la puerta (goal cumplido).
       - crash                — la corrida lanzó una excepción no controlada.
+      - loop_detected        — repitió la misma tool-call en círculos.
       - exhausted_iterations — agotó el tope de iteraciones sin lograr el goal.
       - tool_errors          — terminó sin goal y hubo errores de herramientas.
       - wrong_path           — terminó "tranquilo" sin goal (razonó mal el camino).
+
+    `loop_detected` va ANTES que `exhausted_iterations` a propósito: una
+    corrida en loop casi siempre agota también las iteraciones, y el loop es
+    la causa mientras que agotar el tope es la consecuencia.
+
+    El tope se compara contra `llm_calls`, no contra `tool_calls`: el bucle
+    de `run()` limita LLAMADAS AL LLM, y un `assistant` puede pedir varias
+    tools en una sola respuesta. Comparar tool-calls dejaba la categoría
+    inalcanzable (con una tool por respuesta, `tool_calls` nunca llega al
+    tope).
     """
     if case["goal_achieved"]:
         return "success"
     if case.get("crashed"):
         return "crash"
-    if case["tool_calls"] >= max_iterations:
+    if repeticiones_consecutivas(case.get("steps") or []) >= LOOP_THRESHOLD:
+        return "loop_detected"
+    if case.get("llm_calls", 0) >= max_iterations:
         return "exhausted_iterations"
     if case["tool_error_count"] > 0:
         return "tool_errors"
@@ -174,9 +212,12 @@ def report_md(summary: dict[str, Any], meta: dict[str, Any]) -> str:
     lines.append(header)
     lines.append("|---|---:|---:|---:|---:|---:|---:|")
     for config, m in summary["by_config"].items():
+        # El overhead solo existe si hubo casos resueltos; sin eso, "—".
+        overhead = m["avg_calls_overhead_vs_optimal"]
+        overhead_txt = f"{overhead}x" if overhead is not None else "—"
         lines.append(
             f"| {config} | {m['accuracy']} | {m['solved']}/{m['n']} | "
-            f"{m['avg_calls_overhead_vs_optimal']}x | {m['avg_agent_tokens']} | "
+            f"{overhead_txt} | {m['avg_agent_tokens']} | "
             f"{m['avg_memory_tokens']} | {m['avg_latency_s']} |"
         )
     lines.append("")
@@ -261,6 +302,8 @@ def run_one(
         "error": error_repr,
         "answer": result.answer if result else None,
         "tool_calls": len(steps),
+        "llm_calls": getattr(agent, "llm_calls", 0),
+        "max_consecutive_repeats": repeticiones_consecutivas(steps),
         "tool_error_count": len(tool_errors),
         "agent_input_tokens": (result.input_tokens or 0) if result else 0,
         "agent_output_tokens": (result.output_tokens or 0) if result else 0,

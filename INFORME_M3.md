@@ -222,15 +222,35 @@ Como los resultados de accuracy están acotados por el modelo, comparamos **el
 mismo framework sobre varios modelos** para separar *límites del modelo* de
 *límites del framework*. Cada corrida versiona su `provider`/`model`, y
 `scripts/comparar_modelos_m3.py` arma la comparativa a partir de todas las
-corridas presentes —basta correr un modelo nuevo y volver a ejecutarlo.
+corridas presentes —basta correr un modelo nuevo y volver a ejecutarlo. Corrimos
+`qwen2.5:3b` y `llama3.2` (Ollama, repeats-3); queda pendiente `nova-lite`
+(Bedrock, modelo fuerte).
 
-![Latencia p95 por modelo × configuración](docs/m3_cmp_latencia.png)
+**Hallazgo 1 — los dos modelos fallan de forma distinta.** No es el mismo 0/8:
 
-Modelos: `qwen2.5:3b` (Ollama, local) †; **pendiente** `nova-lite` (Bedrock,
-modelo fuerte) y `llama3.2` (Ollama). La lectura esperada: los efectos de los
-experimentos (costo del resumen, limpieza del gate) deberían **persistir entre
-modelos**, mientras que la **accuracy** debería subir con el modelo fuerte —lo
-que confirmaría que el 0/8 es del modelo, no del framework.
+| | `qwen2.5:3b` | `llama3.2` |
+|---|---|---|
+| Modo de fallo dominante | **prosa** (no actúa) | **tool_errors** (actúa, pero inválido) |
+| Uso de `use`/`go` | ~0 | usa `use` y `go`, pero con errores |
+
+`qwen` se queda en describir la acción; `llama3.2` sí la intenta pero se
+equivoca de objeto/argumento. **El "0/8" esconde dos patologías opuestas** —solo
+visibles porque medimos el comportamiento, no un número.
+
+**Hallazgo 2 — el efecto del resumen es *dependiente del modelo*.**
+
+![Accuracy por modelo × configuración](docs/m3_cmp_accuracy.png)
+
+La **única accuracy no-cero de toda la evaluación** es `llama3.2` + `summarizer`
+(**2/24 ≈ 0.083**). El resumen **ayuda** a un modelo que *actúa* (`llama3.2`:
+le da estado para no repetir), pero **perjudica** a uno que *no actúa*
+(`qwen`: §4.1, más latencia y loops, sin beneficio). Es decir, **la conclusión
+del Experimento 1 se invierte según el modelo** —un resultado que un solo modelo
+habría ocultado, y el argumento más fuerte para la comparación cross-modelo.
+
+La lectura para Bedrock: con un modelo que llame herramientas de forma
+confiable, esperamos que la accuracy despegue y que estos efectos
+(costo/limpieza/beneficio del resumen) se puedan medir sobre casos resueltos.
 
 ### 3.6 Observabilidad: perfil de comportamiento
 
@@ -299,10 +319,13 @@ estudio (los demás quedan fijos).
   la parte "ayuda en `extreme-archive`" de la hipótesis: con este modelo el
   agente falla **aguas arriba** (prosa) y nunca llega a desbordar el contexto,
   que es donde el resumen pagaría.
-- **Conclusión.** En este régimen el resumen es **costo puro**: confirma la
-  primera mitad de la hipótesis (*perjudica cuando el contexto crudo entra*). La
-  segunda mitad queda para un modelo que sí llame herramientas (Bedrock). Motiva
-  el **summarizer selectivo** de §5.
+- **Conclusión.** Con `qwen2.5:3b` el resumen es **costo puro** (perjudica). Pero
+  el efecto es **dependiente del modelo**: con `llama3.2` —que sí actúa— el
+  resumen **ayuda** y da la única accuracy no-cero de la evaluación (2/24, §3.5).
+  La lectura no es "el resumen es malo" sino "el resumen ayuda a un modelo que
+  actúa y estorba a uno que no" —lo que motiva el **summarizer selectivo** de §5.
+  La comparación cross-modelo fue clave para no sacar la conclusión equivocada
+  desde un solo modelo.
 
 ### 4.2 Experimento 2 — Gate determinístico (gate on/off)
 

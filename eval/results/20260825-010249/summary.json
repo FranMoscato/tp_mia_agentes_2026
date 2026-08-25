@@ -1,0 +1,50 @@
+{
+  "meta": {
+    "timestamp": "20260825-010249",
+    "module": "student_framework",
+    "max_iterations": 30,
+    "repeats": 1,
+    "provider": "ollama",
+    "model": "qwen2.5:3b",
+    "bedrock_model_id": "amazon.nova-lite-v1:0",
+    "aws_profile": "882885365928_udesasbx_IsbUsersPS",
+    "aws_region": "us-east-1",
+    "prompt_version": "escape-v1",
+    "git_commit": "b975275"
+  },
+  "summary": {
+    "n_cases": 1,
+    "by_config": {
+      "react": {
+        "n": 1,
+        "solved": 1,
+        "accuracy": 1.0,
+        "accuracy_ci95": [
+          0.207,
+          1.0
+        ],
+        "pass_hat_k": 1.0,
+        "k": 1,
+        "pass_k_scenarios": "1/1",
+        "avg_calls_overhead_vs_optimal": 1.67,
+        "avg_tool_calls": 5.0,
+        "latency_p50_s": 15.27,
+        "latency_p95_s": 15.27,
+        "tokens_per_solved": 15919,
+        "avg_agent_tokens": 15919.0,
+        "avg_memory_tokens": 0.0,
+        "failure_breakdown": {
+          "success": 1
+        },
+        "prosa_variant_breakdown": {},
+        "by_difficulty": {
+          "easy": {
+            "n": 1,
+            "solved": 1,
+            "accuracy": 1.0
+          }
+        }
+      }
+    }
+  }
+}

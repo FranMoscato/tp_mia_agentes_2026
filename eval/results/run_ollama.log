@@ -1,0 +1,136 @@
+Computando óptimos (BFS sobre el grafo de estados)...
+  study-with-key: óptimo = 3
+  color-locks: óptimo = 11
+  library-search: óptimo = 7
+  extreme-archive: óptimo = 4
+  apartment-keys: óptimo = 7
+  office-sequence: óptimo = 13
+  vault-combination: óptimo = 21
+  backtracking-vault: óptimo = 18
+
+[1/24] study-with-key · react · repeat 0
+    ✗ goal=False calls=3 latency=5.313s
+[2/24] study-with-key · summarizer · repeat 0
+    ✗ goal=False calls=1 latency=14.048s
+[3/24] study-with-key · gate · repeat 0
+    ✗ goal=False calls=1 latency=2.677s
+[4/24] color-locks · react · repeat 0
+    ✗ goal=False calls=3 latency=4.273s
+[5/24] color-locks · summarizer · repeat 0
+    ✗ goal=False calls=2 latency=23.203s
+[6/24] color-locks · gate · repeat 0
+    ✗ goal=False calls=2 latency=6.889s
+[7/24] library-search · react · repeat 0
+    ✗ goal=False calls=2 latency=4.04s
+[8/24] library-search · summarizer · repeat 0
+    ✗ goal=False calls=3 latency=60.093s
+[9/24] library-search · gate · repeat 0
+    ✗ goal=False calls=1 latency=2.952s
+[10/24] extreme-archive · react · repeat 0
+    ✗ goal=False calls=1 latency=2.462s
+[11/24] extreme-archive · summarizer · repeat 0
+    ✗ goal=False calls=2 latency=33.804s
+[12/24] extreme-archive · gate · repeat 0
+    ✗ goal=False calls=1 latency=3.241s
+[13/24] apartment-keys · react · repeat 0
+    ✗ goal=False calls=1 latency=1.823s
+[14/24] apartment-keys · summarizer · repeat 0
+    ✗ goal=False calls=4 latency=42.443s
+[15/24] apartment-keys · gate · repeat 0
+    ✗ goal=False calls=1 latency=2.355s
+[16/24] office-sequence · react · repeat 0
+    ✗ goal=False calls=6 latency=8.574s
+[17/24] office-sequence · summarizer · repeat 0
+    ✗ goal=False calls=3 latency=32.512s
+[18/24] office-sequence · gate · repeat 0
+    ✗ goal=False calls=3 latency=5.023s
+[19/24] vault-combination · react · repeat 0
+    ✗ goal=False calls=2 latency=5.796s
+[20/24] vault-combination · summarizer · repeat 0
+    ✗ goal=False calls=1 latency=17.054s
+[21/24] vault-combination · gate · repeat 0
+    ✗ goal=False calls=2 latency=4.687s
+[22/24] backtracking-vault · react · repeat 0
+    ✗ goal=False calls=1 latency=1.997s
+[23/24] backtracking-vault · summarizer · repeat 0
+    ✗ goal=False calls=1 latency=13.771s
+[24/24] backtracking-vault · gate · repeat 0
+    ✗ goal=False calls=1 latency=3.495s
+
+# Evaluación M3 — resumen
+
+- Fecha: 20260825-010410
+- Módulo del agente: `student_framework`
+- Provider/modelo: `ollama` / `qwen2.5:3b`
+- Versión de prompt: `escape-v1` · commit: `b3bffcd`
+- max_iterations: 30 · repeats: 1
+- Casos totales: 24
+
+## Métricas por configuración
+
+_Latencia en percentiles (nunca promedio); costo por caso resuelto; pass^k = resolver el escenario en los k intentos._
+
+| Config | Accuracy (IC95%) | pass^k | Overhead vs óptimo | Tokens/resuelto | Latencia p50/p95 (s) |
+|---|---:|---:|---:|---:|---:|
+| gate | 0.0 [0.0, 0.324] | 0.0 (0/8, k=1) | — | — | 3.368 / 6.236 |
+| react | 0.0 [0.0, 0.324] | 0.0 (0/8, k=1) | — | — | 4.156 / 7.602 |
+| summarizer | 0.0 [0.0, 0.324] | 0.0 (0/8, k=1) | — | — | 27.858 / 53.915 |
+
+### gate
+
+**Accuracy por dificultad:**
+
+| Dificultad | Resueltos | Accuracy |
+|---|---:|---:|
+| easy | 0/1 | 0.0 |
+| extreme | 0/3 | 0.0 |
+| hard | 0/2 | 0.0 |
+| medium | 0/2 | 0.0 |
+
+**Modos de fallo:**
+
+- `prosa_en_vez_de_tool`: 8
+    - inversion_de_rol: 4
+    - otro: 3
+    - intencion_anunciada: 1
+
+### react
+
+**Accuracy por dificultad:**
+
+| Dificultad | Resueltos | Accuracy |
+|---|---:|---:|
+| easy | 0/1 | 0.0 |
+| extreme | 0/3 | 0.0 |
+| hard | 0/2 | 0.0 |
+| medium | 0/2 | 0.0 |
+
+**Modos de fallo:**
+
+- `prosa_en_vez_de_tool`: 7
+    - inversion_de_rol: 4
+    - otro: 2
+    - intencion_anunciada: 1
+- `loop_detected`: 1
+
+### summarizer
+
+**Accuracy por dificultad:**
+
+| Dificultad | Resueltos | Accuracy |
+|---|---:|---:|
+| easy | 0/1 | 0.0 |
+| extreme | 0/3 | 0.0 |
+| hard | 0/2 | 0.0 |
+| medium | 0/2 | 0.0 |
+
+**Modos de fallo:**
+
+- `prosa_en_vez_de_tool`: 6
+    - inversion_de_rol: 4
+    - otro: 2
+- `tool_errors`: 1
+- `loop_detected`: 1
+
+
+Resultados en: /Users/clarakearney/Documents/UdeSA/MIA/Agentes/tp_mia_agentes_2026/eval/results/20260825-010410

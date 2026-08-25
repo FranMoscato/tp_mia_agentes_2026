@@ -1,0 +1,32 @@
+{
+  "gate": {
+    "n": 18,
+    "avg_exploracion": 3.33,
+    "distribucion": {
+      "2": 2,
+      "3": 9,
+      "4": 6,
+      "5": 1
+    }
+  },
+  "react": {
+    "n": 17,
+    "avg_exploracion": 3.41,
+    "distribucion": {
+      "2": 2,
+      "3": 6,
+      "4": 9
+    }
+  },
+  "summarizer": {
+    "n": 19,
+    "avg_exploracion": 2.63,
+    "distribucion": {
+      "2": 10,
+      "3": 6,
+      "4": 3
+    }
+  }
+}
+
+Veredictos en: eval/results/20260825-011809/judged.jsonl

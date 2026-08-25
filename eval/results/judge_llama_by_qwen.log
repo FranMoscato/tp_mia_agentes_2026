@@ -1,0 +1,34 @@
+{
+  "judge_model": "qwen2.5:3b",
+  "by_config": {
+    "gate": {
+      "n": 12,
+      "avg_score": 0.67,
+      "yes_rate": {
+        "exploracion_ordenada": 0.0,
+        "acciones_apoyadas": 0.08,
+        "sin_redundancia_evitable": 0.58
+      }
+    },
+    "react": {
+      "n": 9,
+      "avg_score": 0.44,
+      "yes_rate": {
+        "exploracion_ordenada": 0.0,
+        "acciones_apoyadas": 0.0,
+        "sin_redundancia_evitable": 0.44
+      }
+    },
+    "summarizer": {
+      "n": 9,
+      "avg_score": 0.33,
+      "yes_rate": {
+        "exploracion_ordenada": 0.0,
+        "acciones_apoyadas": 0.0,
+        "sin_redundancia_evitable": 0.33
+      }
+    }
+  }
+}
+
+Veredictos en: eval/results/20260825-014434/judged.jsonl

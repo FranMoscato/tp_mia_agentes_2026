@@ -123,6 +123,14 @@ def main() -> None:
     ):
         generados.append("m3_cmp_latencia.png")
 
+    if _grouped_bar(
+        "Costo en tokens por modelo × configuración", "Tokens promedio por caso",
+        lambda run, cfg: (run["by_config"].get(cfg, {}).get("avg_agent_tokens") or 0)
+        + (run["by_config"].get(cfg, {}).get("avg_memory_tokens") or 0),
+        "m3_cmp_costo.png", corridas,
+    ):
+        generados.append("m3_cmp_costo.png")
+
     if any(run["judge"] for run in corridas.values()):
         if _grouped_bar(
             "Calidad de exploración (judge) por modelo × config", "Exploración (1–5)",

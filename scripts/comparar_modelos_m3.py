@@ -134,9 +134,10 @@ def main() -> None:
 
     if any(run["judge"] for run in corridas.values()):
         if _grouped_bar(
-            "Calidad de exploración (judge) por modelo × config", "Exploración (1–5)",
-            lambda run, cfg: (run["judge"] or {}).get(cfg, {}).get("avg_exploracion"),
-            "m3_cmp_judge.png", corridas, ylim=(0, 5),
+            "Calidad de exploración (judge) por modelo × config", "Criterios cumplidos (0–3)",
+            lambda run, cfg: ((run["judge"] or {}).get("by_config", {}) or {})
+            .get(cfg, {}).get("avg_score"),
+            "m3_cmp_judge.png", corridas, ylim=(0, 3),
         ):
             generados.append("m3_cmp_judge.png")
 

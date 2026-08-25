@@ -41,29 +41,41 @@ sys.path.insert(0, str(_REPO_ROOT))
 # Rúbrica y schema del veredicto
 # ---------------------------------------------------------------------------
 
+# Checklist BINARIO (no escala 1-5): la clase recomienda varios sí/no por
+# defecto —una escala ordinal se amontona en el medio (tendencia central) y
+# cuesta reproducirla; los sí/no son reproducibles y dicen QUÉ falló—. Cada ítem
+# es un juicio holístico sobre el trace (no algo que el código ya verifica).
 RUBRICA_EXPLORACION = """\
-Puntuá la CALIDAD DE LA EXPLORACIÓN del 1 al 5 (no si resolvió, eso se mide aparte):
-  5 — Metódica: look al entrar, examina antes de tomar, no repite acciones ni
-      usa objetos que no tiene; cada acción se apoya en lo observado.
-  4 — Mayormente ordenada, con alguna acción redundante o fuera de orden.
-  3 — Errática: mezcla exploración con intentos a ciegas; varias redundancias.
-  2 — Desordenada: repite acciones, ignora resultados, prueba cosas al azar.
-  1 — Sin método: casi no explora, o entra en loop, o "habla" en vez de actuar.\
+Respondé SÍ/NO a cada criterio de CALIDAD DE LA EXPLORACIÓN (no si resolvió, eso
+se verifica por código aparte):
+  - exploracion_ordenada: ¿observó (look/examine) antes de actuar, sin saltar a
+    ciegas a take/use/go?
+  - acciones_apoyadas: ¿cada acción se apoya en algo observado antes (no inventó
+    ni adivinó objetos, IDs o salidas)?
+  - sin_redundancia_evitable: ¿evitó repetir la misma acción o deshacer trabajo
+    sin una razón visible?\
 """
 
 
 class TrajectoryVerdict(BaseModel):
-    """Veredicto cualitativo sobre una trayectoria."""
+    """Veredicto cualitativo: checklist binario + justificación."""
 
-    exploracion_metodica: int = Field(ge=1, le=5)
+    exploracion_ordenada: bool
+    acciones_apoyadas: bool
+    sin_redundancia_evitable: bool
     justificacion: str
+
+
+# Criterios binarios, en orden fijo. El "score" derivado es cuántos dan True.
+CRITERIOS = ["exploracion_ordenada", "acciones_apoyadas", "sin_redundancia_evitable"]
 
 
 JUDGE_SYSTEM_PROMPT = (
     "Sos un evaluador experto de agentes que resuelven salas de escape. "
-    "Puntuás la CALIDAD DEL PROCESO de exploración, no si se logró el objetivo "
-    "(eso se verifica por código aparte). Sos estricto y te basás solo en la "
-    "traza provista. Respondé únicamente con la herramienta final_result."
+    "Evaluás la CALIDAD DEL PROCESO de exploración con un checklist SÍ/NO, no si "
+    "se logró el objetivo (eso se verifica por código aparte). Sos estricto y te "
+    "basás solo en la traza provista. Respondé únicamente con la herramienta "
+    "final_result."
 )
 
 JUDGE_PROMPT_TEMPLATE = """\
@@ -74,7 +86,8 @@ Evaluá la siguiente trayectoria de un agente en una sala de escape.
 TRAYECTORIA:
 {trace}
 
-Devolvé `exploracion_metodica` (1-5) y una `justificacion` breve basada en la traza.
+Devolvé cada criterio como booleano (true/false) y una `justificacion` breve
+basada en la traza.
 """
 
 
@@ -103,15 +116,28 @@ def format_trace(case: dict[str, Any]) -> str:
 
 
 def aggregate_scores(judged: list[dict[str, Any]]) -> dict[str, Any]:
-    """Promedio y distribución del puntaje de exploración por configuración."""
+    """Por config: tasa de SÍ por criterio + score derivado (0-3) promedio.
+
+    El score de un caso es cuántos criterios dan True (0 a 3). Reportamos el
+    promedio y la **tasa de SÍ por criterio**, que es diagnóstica: dice *qué*
+    falló, no solo cuánto.
+    """
     out: dict[str, Any] = {}
     for config in sorted({j["config"] for j in judged}):
-        sub = [j for j in judged if j["config"] == config]
-        scores = [j["verdict"]["exploracion_metodica"] for j in sub if j.get("verdict")]
+        sub = [j for j in judged if j["config"] == config and j.get("verdict")]
+        n = len(sub)
+        if not n:
+            out[config] = {"n": 0, "avg_score": None, "yes_rate": {}}
+            continue
+        yes_rate = {
+            crit: round(sum(1 for j in sub if j["verdict"].get(crit)) / n, 2)
+            for crit in CRITERIOS
+        }
+        scores = [sum(1 for crit in CRITERIOS if j["verdict"].get(crit)) for j in sub]
         out[config] = {
-            "n": len(scores),
-            "avg_exploracion": round(sum(scores) / len(scores), 2) if scores else None,
-            "distribucion": dict(sorted(Counter(scores).items())),
+            "n": n,
+            "avg_score": round(sum(scores) / n, 2),  # 0-3
+            "yes_rate": yes_rate,
         }
     return out
 
@@ -154,9 +180,20 @@ def judge_case(case: dict[str, Any], judge_agent: Any) -> dict[str, Any] | None:
     return verdict.model_dump()
 
 
-def judge_cases(cases: list[dict[str, Any]], module: Any) -> list[dict[str, Any]]:
-    """Puntúa todos los casos. Usa un agente 'limpio' como judge LLM."""
-    judge_agent = module.build_agent({"register_default_tools": False})
+def judge_cases(
+    cases: list[dict[str, Any]], module: Any, judge_model: str | None = None
+) -> list[dict[str, Any]]:
+    """Puntúa todos los casos con un judge 'limpio'.
+
+    `judge_model` fuerza un modelo **distinto del agente** (evita self-preference;
+    idealmente más capaz). Sin él, usa el proveedor del entorno.
+    """
+    config: dict[str, Any] = {"register_default_tools": False}
+    if judge_model:
+        from mia_agents.llm_client import LLMClient, OllamaProvider
+
+        config["llm_client"] = LLMClient(OllamaProvider(model=judge_model))
+    judge_agent = module.build_agent(config)
     judged = []
     for c in cases:
         judged.append(
@@ -177,20 +214,24 @@ def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="eval/judge.py")
     parser.add_argument("cases", help="Ruta al cases.jsonl de una corrida.")
     parser.add_argument("--module", default="student_framework")
+    parser.add_argument(
+        "--judge-model", default=None,
+        help="Modelo del judge (Ollama). DEBE ser distinto del agente evaluado.",
+    )
     args = parser.parse_args(argv)
 
     cases_path = Path(args.cases)
     cases = [json.loads(line) for line in cases_path.read_text(encoding="utf-8").splitlines() if line.strip()]
 
     module = importlib.import_module(args.module)
-    judged = judge_cases(cases, module)
+    judged = judge_cases(cases, module, judge_model=args.judge_model)
 
     out_path = cases_path.parent / "judged.jsonl"
     with out_path.open("w", encoding="utf-8") as fh:
         for j in judged:
             fh.write(json.dumps(j, ensure_ascii=False) + "\n")
 
-    agg = aggregate_scores(judged)
+    agg = {"judge_model": args.judge_model, "by_config": aggregate_scores(judged)}
     (cases_path.parent / "judge_summary.json").write_text(
         json.dumps(agg, indent=2, ensure_ascii=False), encoding="utf-8"
     )

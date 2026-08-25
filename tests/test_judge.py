@@ -42,24 +42,34 @@ def test_format_trace_sin_acciones() -> None:
 # --- aggregate_scores ------------------------------------------------------
 
 
-def test_aggregate_scores_promedio_y_distribucion() -> None:
+def _v(o, a, s):
+    return {"exploracion_ordenada": o, "acciones_apoyadas": a,
+            "sin_redundancia_evitable": s, "justificacion": ""}
+
+
+def test_aggregate_scores_yes_rate_y_score() -> None:
     judged = [
-        {"config": "react", "verdict": {"exploracion_metodica": 2}},
-        {"config": "react", "verdict": {"exploracion_metodica": 4}},
-        {"config": "gate", "verdict": {"exploracion_metodica": 5}},
+        # score 3 (todo True)
+        {"config": "react", "verdict": _v(True, True, True)},
+        # score 1 (solo ordenada)
+        {"config": "react", "verdict": _v(True, False, False)},
+        {"config": "gate", "verdict": _v(False, False, False)},  # score 0
     ]
     agg = judge.aggregate_scores(judged)
-    assert agg["react"]["avg_exploracion"] == 3.0
-    assert agg["react"]["distribucion"] == {2: 1, 4: 1}
-    assert agg["gate"]["avg_exploracion"] == 5.0
+    assert agg["react"]["n"] == 2
+    assert agg["react"]["avg_score"] == 2.0  # (3+1)/2
+    # tasa de SÍ por criterio (diagnóstica): ordenada 2/2, apoyadas 1/2.
+    assert agg["react"]["yes_rate"]["exploracion_ordenada"] == 1.0
+    assert agg["react"]["yes_rate"]["acciones_apoyadas"] == 0.5
+    assert agg["gate"]["avg_score"] == 0.0
 
 
 def test_aggregate_scores_ignora_veredictos_none() -> None:
     judged = [
         {"config": "react", "verdict": None},
-        {"config": "react", "verdict": {"exploracion_metodica": 3}},
+        {"config": "react", "verdict": _v(True, True, True)},
     ]
-    assert judge.aggregate_scores(judged)["react"]["avg_exploracion"] == 3.0
+    assert judge.aggregate_scores(judged)["react"]["avg_score"] == 3.0
 
 
 # --- cohen_kappa (meta-eval #16) -------------------------------------------
@@ -87,9 +97,12 @@ def test_cohen_kappa_largos_distintos_o_vacio() -> None:
 
 
 def test_judge_case_usa_structured_call() -> None:
+    veredicto = {"exploracion_ordenada": True, "acciones_apoyadas": True,
+                 "sin_redundancia_evitable": False, "justificacion": "ok"}
+
     class _FakeVerdict:
         def model_dump(self):
-            return {"exploracion_metodica": 4, "justificacion": "ordenada"}
+            return veredicto
 
     class _FakeAgent:
         def __init__(self):
@@ -104,7 +117,7 @@ def test_judge_case_usa_structured_call() -> None:
     case = {"scenario": "x", "difficulty": "easy", "steps": []}
     verdict = judge.judge_case(case, agent)
     assert agent.llamado
-    assert verdict == {"exploracion_metodica": 4, "justificacion": "ordenada"}
+    assert verdict == veredicto
 
 
 def test_judge_case_devuelve_none_si_el_judge_falla() -> None:

@@ -236,20 +236,24 @@ def grafico_heatmap(by_config: dict, meta: dict) -> None:
 
 
 def grafico_judge(judge_summary: dict, meta: dict) -> None:
-    configs = [c for c in ("react", "summarizer", "gate") if c in judge_summary]
+    # judge_summary = {"judge_model": ..., "by_config": {...}} (checklist binario).
+    judge_model = judge_summary.get("judge_model")
+    by_cfg = judge_summary.get("by_config", judge_summary)
+    configs = [c for c in ("react", "summarizer", "gate") if c in by_cfg]
     if not configs:
         return
-    avgs = [judge_summary[c]["avg_exploracion"] or 0 for c in configs]
-    ns = [judge_summary[c]["n"] for c in configs]
+    avgs = [by_cfg[c].get("avg_score") or 0 for c in configs]
+    ns = [by_cfg[c]["n"] for c in configs]
 
     fig, ax = plt.subplots(figsize=(7, 4.2))
     bars = ax.bar(configs, avgs, color=[COLOR.get(c, "#64748b") for c in configs])
     for bar, n in zip(bars, ns):
-        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.05,
-                f"{bar.get_height():.1f}\n(n={n})", ha="center", fontsize=8)
-    ax.set_ylim(0, 5)
-    ax.set_ylabel("Calidad de exploración (1–5)")
-    ax.set_title(f"Dimensión cualitativa (LLM-as-judge)\n({meta.get('provider')}/{meta.get('model')})")
+        ax.text(bar.get_x() + bar.get_width() / 2, bar.get_height() + 0.03,
+                f"{bar.get_height():.2f}\n(n={n})", ha="center", fontsize=8)
+    ax.set_ylim(0, 3)
+    ax.set_ylabel("Criterios cumplidos (0–3)")
+    ax.set_title(f"Dimensión cualitativa (checklist binario)\n"
+                 f"agente {meta.get('model')} · judge {judge_model}")
     ax.spines[["top", "right"]].set_visible(False)
     fig.tight_layout()
     fig.savefig(_DOCS / "m3_judge.png", dpi=150)

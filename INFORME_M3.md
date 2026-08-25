@@ -196,22 +196,25 @@ corregirla —otro costo del resumen, además de la latencia.
 
 ### 3.4 Resultados cualitativos (LLM-as-judge)
 
-![Calidad de exploración por configuración](docs/m3_judge.png)
-
 Calidad de exploración (1–5), sobre las trazas reales:
 
 | Config | Casos puntuados | Promedio |
 |---|---:|---:|
-| `react` | 5/8 | **3.4**† |
-| `summarizer` | 5/8 | 3.0† |
-| `gate` | 5/8 | 3.0† |
+| `react` | 17/24 | **3.41**† |
+| `gate` | 18/24 | 3.33† |
+| `summarizer` | 19/24 | **2.63**† |
 
-Los puntajes ~3 reflejan trazas que **empiezan metódicas** (look → examine →
-take) pero **se abandonan** en prosa. **Dato importante:** el judge solo pudo
-puntuar **5/8** por config —en los otros 3, `qwen2.5:3b` no produjo salida
-estructurada válida. Es decir, **en un modelo chico hasta el judge es poco
-confiable**; por eso la meta-eval con kappa (§2.2) es la que valida sus números,
-y esperamos puntuar los 8/8 en Bedrock.
+![Calidad de exploración por configuración](docs/m3_judge.png)
+
+Hallazgo: el **`summarizer` produce trayectorias de menor calidad** (2.63 vs.
+3.41 de `react`), consistente con que loopea más (§3.3) —el resumen no solo
+cuesta más tiempo/tokens, sino que **empeora la trayectoria**. `react` y `gate`
+quedan parejos (~3.4): el gate no degrada la exploración.
+
+**Dato importante:** el judge solo puntuó **17–19/24** —en el resto,
+`qwen2.5:3b` no produjo salida estructurada válida. Es decir, **en un modelo
+chico hasta el judge es poco confiable**; por eso la meta-eval con kappa (§2.2)
+es la que valida sus números, y esperamos cobertura completa en Bedrock.
 
 ### 3.5 Comparación cross-modelo / proveedor
 

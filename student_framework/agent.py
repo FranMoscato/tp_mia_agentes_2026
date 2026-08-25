@@ -1141,6 +1141,9 @@ class MyAgent:
                 prompt=prompt,
                 schema=GameState,
                 system=MEMORY_SYSTEM_PROMPT,
+                # 3 (uno más que el default 2): el GameState tiene 7 campos, más
+                # superficie para malformar la salida, así que le damos un intento
+                # de reparación extra antes de rendirnos.
                 max_repair_attempts=3,
                 on_usage=self._acumular_memory_tokens,
             )

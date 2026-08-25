@@ -119,7 +119,10 @@ def costo_usd(input_tokens: int, output_tokens: int, model: str | None) -> float
 # Cuántas tool-calls idénticas CONSECUTIVAS (misma tool + mismos argumentos)
 # cuentan como loop. Repetir `look` es legítimo en los escenarios multi-sala
 # —va intercalado con `go`—, por eso exigimos que sean consecutivas y no un
-# simple conteo global.
+# simple conteo global. Por qué **3** y no 2: repetir una acción UNA vez puede
+# ser un reintento razonable tras un resultado inesperado; a la TERCERA idéntica
+# ya no hay corrección posible, es un ciclo. Umbral conservador (evita falsos
+# positivos); si hiciera falta, se baja.
 LOOP_THRESHOLD = 3
 
 
@@ -237,8 +240,10 @@ def _percentile(xs: list[float], p: float) -> float | None:
 def _wilson_ci(k: int, n: int, z: float = 1.96) -> list[float | None]:
     """Intervalo de confianza de Wilson (95%) para una proporción k/n.
 
-    Mejor que la normal para n chico / proporciones cerca de 0 o 1, que es
-    justo el régimen de esta eval (8 escenarios, pocos repeats).
+    `z = 1.96` es el z-score del 95% (nivel de confianza estándar); para 90%
+    sería 1.645, para 99% 2.576. Wilson es mejor que la normal para n chico /
+    proporciones cerca de 0 o 1, que es justo el régimen de esta eval (8
+    escenarios, pocos repeats).
     """
     if n == 0:
         return [None, None]

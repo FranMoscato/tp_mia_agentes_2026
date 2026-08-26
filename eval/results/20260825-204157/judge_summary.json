@@ -1,0 +1,43 @@
+{
+  "judge_model": "amazon.nova-pro-v1:0",
+  "judge_provider": "bedrock",
+  "mode": "single_call",
+  "by_config": {
+    "gate": {
+      "n": 24,
+      "avg_score": 2.38,
+      "yes_rate": {
+        "exploracion_ordenada": 0.88,
+        "acciones_apoyadas": 0.88,
+        "sin_redundancia_evitable": 0.62
+      }
+    },
+    "react": {
+      "n": 24,
+      "avg_score": 2.33,
+      "yes_rate": {
+        "exploracion_ordenada": 0.88,
+        "acciones_apoyadas": 0.88,
+        "sin_redundancia_evitable": 0.58
+      }
+    },
+    "react_generico": {
+      "n": 24,
+      "avg_score": 2.0,
+      "yes_rate": {
+        "exploracion_ordenada": 0.83,
+        "acciones_apoyadas": 0.71,
+        "sin_redundancia_evitable": 0.46
+      }
+    },
+    "summarizer": {
+      "n": 24,
+      "avg_score": 1.46,
+      "yes_rate": {
+        "exploracion_ordenada": 0.71,
+        "acciones_apoyadas": 0.54,
+        "sin_redundancia_evitable": 0.21
+      }
+    }
+  }
+}

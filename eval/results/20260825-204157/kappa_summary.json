@@ -1,0 +1,20 @@
+{
+  "n": 96,
+  "by_criterion": {
+    "exploracion_ordenada": {
+      "kappa": 0.261,
+      "ref_yes_rate": 0.97,
+      "judge_yes_rate": 0.82
+    },
+    "acciones_apoyadas": {
+      "kappa": 0.0,
+      "ref_yes_rate": 0.96,
+      "judge_yes_rate": 0.75
+    },
+    "sin_redundancia_evitable": {
+      "kappa": 0.55,
+      "ref_yes_rate": 0.66,
+      "judge_yes_rate": 0.47
+    }
+  }
+}

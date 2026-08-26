@@ -655,7 +655,7 @@ lease de AWS y el `.env` apuntando a Bedrock (`BEDROCK_MODEL_ID`, `AWS_PROFILE`,
    Es lo que saca la κ de ≈0 y valida (o no) los puntajes del judge:
    ```bash
    python eval/judge.py eval/results/<ts>/cases.jsonl \
-     --judge-provider bedrock --judge-model us.amazon.nova-pro-v1:0
+     --judge-provider bedrock --judge-model amazon.nova-pro-v1:0
    python eval/kappa.py  eval/results/<ts>/cases.jsonl   # o sobre eval/golden/
    ```
 3. **Barridos de hiperparámetros** (ahora expuestos): tope de iteraciones y
@@ -673,7 +673,7 @@ lease de AWS y el `.env` apuntando a Bedrock (`BEDROCK_MODEL_ID`, `AWS_PROFILE`,
 5. **Reproducir el hallazgo del judge** (opcional): el modo per-criterio (4.4) con
    un judge fuerte, para ver si con `nova-pro` **sí** funciona (a diferencia del
    local): `python eval/judge.py … --judge-provider bedrock --judge-model
-   us.amazon.nova-pro-v1:0 --per-criterion`.
+   amazon.nova-pro-v1:0 --per-criterion`.
 
 Y sobre esos resultados, lo que **construiríamos** después:
 
@@ -699,6 +699,67 @@ Y sobre esos resultados, lo que **construiríamos** después:
    **semántica** (hechos persistentes del mundo) permitiría transferir
    aprendizaje entre corridas, hoy imposible porque el estado vive solo en el
    proceso.
+
+### 5.1 Aislar el eje del modelo: un cambio por vez
+
+El salto de `qwen2.5:3b` (0/24) a `nova-lite` (0.792) demuestra que **el techo
+era del modelo y no del framework** —mismo código, mismo prompt `escape-v1`,
+mismo commit, mismo dataset—. Pero entre esos dos puntos cambian **cuatro
+variables a la vez**: tamaño, cuantización, familia de entrenamiento y API.
+
+Por eso la comparación autoriza a decir *"el techo es del modelo"* y **no**
+autoriza a decir *"el techo es del tamaño"*: no sabemos cuánto del 0/24 es
+capacidad del modelo base y cuánto es degradación por correrlo en **Q4_K_M**
+(4 bits), que golpea justamente donde estos modelos fallan —la disciplina de
+tool-calling y el structured output—.
+
+Para cerrarlo hacen falta dos escaleras, cada una moviendo **una sola
+variable**:
+
+**Escalera A — capacidad** (Bedrock; familia, API y tratamiento constantes):
+
+| Modelo | Costo de la corrida completa |
+|---|---:|
+| `amazon.nova-micro-v1:0` | $0.44 |
+| `amazon.nova-lite-v1:0` | $0.75 — **ya corrida (0.792)** |
+| `amazon.nova-pro-v1:0` | $10.00 completa · **$2.25 solo brazo `react`** |
+
+```bash
+python eval/run.py --repeats 3   # con BEDROCK_MODEL_ID=amazon.nova-micro-v1:0
+python eval/run.py --configs react --repeats 3   # con ...=amazon.nova-pro-v1:0
+```
+
+`nova-pro` como agente solo se corre sobre `react`: los otros tres brazos ya
+están medidos con `nova-lite`, que es donde se compara la **arquitectura**. La
+pregunta que responde esta escalera es si la curva **se aplana**: si `nova-pro`
+apenas mejora sobre `nova-lite`, el cuello de botella deja de ser el modelo y
+vuelve a ser el framework.
+
+**Escalera B — tamaño** (Ollama; cuantización Q4_K_M constante):
+
+| Modelo | Parámetros | Estado |
+|---|---:|---|
+| `qwen2.5:3b` | 3.1B | **ya corrida (0/24)** |
+| `qwen2.5:7b` | 7B | pendiente |
+| `qwen2.5:14b` | 14B | pendiente (según RAM disponible) |
+
+```bash
+ollama pull qwen2.5:7b
+OLLAMA_HOST=http://localhost:11434 OLLAMA_MODEL=qwen2.5:7b \
+  python eval/run.py --repeats 3
+```
+
+**Control de cuantización** (tamaño constante en 3B): correr `qwen2.5:3b` sin
+cuantizar contra el mismo modelo en Q4_K_M. Separa "el modelo es chico" de "lo
+comprimimos a 4 bits".
+
+Las corridas se suman solas a la comparación cross-modelo: `summary.json`
+versiona `provider`/`model` en su meta y `scripts/comparar_modelos_m3.py`
+agrupa por esa clave (§3.5).
+
+**Reparto del trabajo.** La escalera A requiere lease de AWS; la B y el control
+de cuantización corren **local y sin lease**, así que pueden avanzar en
+paralelo por quien no lo tenga aprobado todavía.
 
 ---
 
@@ -728,7 +789,7 @@ python eval/kappa.py  eval/golden/cases.jsonl
 
 # Judge FUERTE del próximo paso #1 (nova-pro juzgando a nova-lite, requiere Bedrock)
 python eval/judge.py eval/golden/cases.jsonl \
-  --judge-provider bedrock --judge-model us.amazon.nova-pro-v1:0
+  --judge-provider bedrock --judge-model amazon.nova-pro-v1:0
 python eval/kappa.py  eval/golden/cases.jsonl
 
 # Reproducir el hallazgo: el modo per-criterio (4.4) colapsa con judge débil

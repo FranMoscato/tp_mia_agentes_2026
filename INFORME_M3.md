@@ -757,9 +757,9 @@ Las corridas se suman solas a la comparación cross-modelo: `summary.json`
 versiona `provider`/`model` en su meta y `scripts/comparar_modelos_m3.py`
 agrupa por esa clave (§3.5).
 
-**Reparto del trabajo.** La escalera A requiere lease de AWS y la corre Clara.
-La escalera B y el control de cuantización los corre **Franco**: van **local y
-sin lease**, así que avanzan en paralelo mientras se le aprueba el suyo.
+**Reparto del trabajo.** La escalera A requiere lease de AWS. La B y el control
+de cuantización corren **local y sin lease**, así que avanzan en paralelo; los
+toma **Franco**, que tiene la máquina capaz de correr los modelos de 7B y 14B.
 
 ---
 

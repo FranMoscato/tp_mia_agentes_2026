@@ -29,6 +29,7 @@ Salidas (en `eval/results/<timestamp>/`):
 from __future__ import annotations
 
 import argparse
+import hashlib
 import importlib
 import json
 import math
@@ -93,6 +94,29 @@ _PRICING_USD_POR_1M: dict[str, tuple[float, float]] = {
     "nova-micro": (0.035, 0.14),
     "nova-pro": (0.80, 3.20),
 }
+
+
+def _seed_de_caso(scenario_id: str, repeat: int) -> int | None:
+    """Semilla determinística para un `(escenario, repeat)`, igual en todo brazo.
+
+    Devuelve `None` si el proveedor activo no es Ollama: Bedrock/Nova rechaza la
+    semilla, así que no hay nada que fijar.
+
+    Usa `hashlib` y no `hash()`: el hash de strings de Python está aleatorizado
+    por proceso (PYTHONHASHSEED), lo que haría la "semilla fija" distinta en
+    cada corrida —justo lo contrario de lo que buscamos—.
+    """
+    if not os.environ.get("OLLAMA_HOST"):
+        return None
+    clave = f"{scenario_id}#{repeat}".encode()
+    return int(hashlib.sha256(clave).hexdigest()[:8], 16)
+
+
+def _cliente_ollama_con_semilla(seed: int) -> Any:
+    """`LLMClient` de Ollama con la semilla fijada, respetando el entorno."""
+    from mia_agents.llm_client import LLMClient, OllamaProvider
+
+    return LLMClient(OllamaProvider(seed=seed))
 
 
 def costo_usd(input_tokens: int, output_tokens: int, model: str | None) -> float:
@@ -594,6 +618,21 @@ def run_one(
         build_config["system_prompt"] = escape_prompt
         prompt_version = getattr(module, "ESCAPE_ROOM_SYSTEM_PROMPT_VERSION", None)
 
+    # Bloqueo de la comparación (solo Ollama): la semilla se deriva de
+    # (escenario, repeat) y NO del brazo, así que todos los brazos corren ese
+    # par con la misma semilla. Sin esto, `react` repeat 0 y `gate` repeat 0
+    # son realizaciones aleatorias distintas y la diferencia entre brazos
+    # arrastra ruido de muestreo —medimos que con n=24 la varianza run-to-run
+    # es del orden de los efectos que buscamos—.
+    #
+    # Bedrock/Nova NO acepta semilla (verificado: ParamValidationError en
+    # inferenceConfig.seed, ValidationException en
+    # additionalModelRequestFields.seed), así que en las corridas del informe
+    # este bloqueo no está disponible. Queda como limitación declarada.
+    semilla = _seed_de_caso(scenario.id, repeat)
+    if semilla is not None and "llm_client" not in build_config:
+        build_config["llm_client"] = _cliente_ollama_con_semilla(semilla)
+
     agent = module.build_agent(build_config)
     for fn, schema in make_world_tools(world):
         agent.register_tool(fn, schema)
@@ -631,6 +670,10 @@ def run_one(
         "difficulty": scenario.difficulty,
         "config": config_name,
         "prompt_version": prompt_version,
+        # Semilla usada (None = el proveedor no la soporta, p. ej. Bedrock).
+        # Es la MISMA para un (escenario, repeat) en todos los brazos: eso es
+        # lo que bloquea la comparación.
+        "seed": semilla,
         "repeat": repeat,
         "optimal_calls": optimal_calls,
         "goal_achieved": bool(achieved),

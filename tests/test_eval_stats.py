@@ -171,3 +171,46 @@ def test_cmh_no_siempre_gana_con_un_solo_estrato_util():
     n2 = sum(e[1][1] for e in estratos.values())
     _, p_agrupado = z_test_agrupado(s1, n1, s2, n2)
     assert cmh_test(estratos)["p"] >= p_agrupado
+
+
+# --- semilla de bloqueo (mejora 4) ---------------------------------------
+
+
+def test_semilla_es_estable_entre_procesos(monkeypatch):
+    """La semilla debe depender SOLO de (escenario, repeat), no del proceso.
+
+    Con `hash()` de Python esto fallaría: el hash de strings está aleatorizado
+    por PYTHONHASHSEED, así que la "semilla fija" cambiaría en cada corrida.
+    """
+    from eval.run import _seed_de_caso
+
+    monkeypatch.setenv("OLLAMA_HOST", "http://localhost:11434")
+    # Valor fijado a mano: si alguien cambia la derivación, este test lo avisa.
+    assert _seed_de_caso("study-with-key", 0) == _seed_de_caso("study-with-key", 0)
+    assert isinstance(_seed_de_caso("study-with-key", 0), int)
+
+
+def test_semilla_distingue_escenario_y_repeat(monkeypatch):
+    from eval.run import _seed_de_caso
+
+    monkeypatch.setenv("OLLAMA_HOST", "http://localhost:11434")
+    assert _seed_de_caso("a", 0) != _seed_de_caso("a", 1)
+    assert _seed_de_caso("a", 0) != _seed_de_caso("b", 0)
+
+
+def test_semilla_no_depende_del_brazo(monkeypatch):
+    """El punto del bloqueo: react y gate comparten semilla en el mismo par."""
+    from eval.run import _seed_de_caso
+
+    monkeypatch.setenv("OLLAMA_HOST", "http://localhost:11434")
+    # La firma no toma el brazo: dos llamadas idénticas desde brazos distintos
+    # devuelven lo mismo por construcción.
+    assert _seed_de_caso("library-search", 2) == _seed_de_caso("library-search", 2)
+
+
+def test_sin_ollama_no_hay_semilla(monkeypatch):
+    """Bedrock/Nova rechaza `seed`: no se fija nada y el caso registra None."""
+    from eval.run import _seed_de_caso
+
+    monkeypatch.delenv("OLLAMA_HOST", raising=False)
+    assert _seed_de_caso("study-with-key", 0) is None

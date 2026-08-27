@@ -173,6 +173,7 @@ class OllamaProvider(_BaseLLMProvider):
         host: str | None = None,
         num_ctx: int = 16384,
         default_format: dict[str, Any] | None = None,
+        seed: int | None = None,
     ) -> None:
         self._client = ollama.Client(
             host=host or os.environ.get("OLLAMA_HOST") or "http://localhost:11434"
@@ -180,6 +181,18 @@ class OllamaProvider(_BaseLLMProvider):
         self._model = model or os.environ.get("OLLAMA_MODEL", "llama3.1")
         self._num_ctx = num_ctx
         self._default_format = default_format
+        # Semilla de muestreo. Sirve para BLOQUEAR la comparación entre brazos:
+        # si `react` y `gate` corren el mismo (escenario, repeat) con la misma
+        # semilla, la diferencia entre brazos deja de arrastrar ruido de
+        # muestreo. Medimos que la varianza run-to-run con n=24 es del orden de
+        # los efectos que buscamos, así que esto importa.
+        #
+        # OJO: solo Ollama. Bedrock/Nova RECHAZA la semilla —verificado:
+        # `inferenceConfig.seed` da ParamValidationError y
+        # `additionalModelRequestFields.seed` da ValidationException—. Las
+        # corridas principales del informe son en Bedrock, así que ahí este
+        # bloqueo NO está disponible y la varianza queda como limitación.
+        self._seed = seed
 
     def chat(
         self,
@@ -199,7 +212,11 @@ class OllamaProvider(_BaseLLMProvider):
         kwargs: dict[str, Any] = {
             "model": self._model,
             "messages": normalized,
-            "options": {"temperature": temperature, "num_ctx": self._num_ctx},
+            "options": {
+                "temperature": temperature,
+                "num_ctx": self._num_ctx,
+                **({"seed": self._seed} if self._seed is not None else {}),
+            },
         }
         if ollama_tools:
             kwargs["tools"] = ollama_tools

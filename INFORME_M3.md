@@ -659,6 +659,21 @@ no-cero del barrido local fue `llama3.2` + `summarizer` (2/24 ≈ 0.083), o sea 
 resumen ayudaba al modelo que *actuaba* y no al que *no actuaba*. Con Nova el
 efecto se invierte del todo: `summarizer` queda último en los tres escalones.
 
+**Hallazgo 3 — "barato" no es una virtud si no resolvés.**
+
+![Costo en tokens por modelo × configuración](docs/m3_cmp_costo.png)
+
+Los modelos locales gastan **un orden de magnitud menos**: `llama3.2` consume
+4.700 tokens por caso en `react` contra los 113.000 de `nova-lite`, unas 24 veces
+menos. Pero su accuracy es 0. No son eficientes: **abandonan**. El agente que
+responde en prosa a los tres turnos cierra el loop temprano y por eso "cuesta
+poco".
+
+Es el argumento de por qué la métrica que reportamos es **tokens por caso
+resuelto** (§2.1) y no tokens por caso: con el denominador en cero, el numerador
+chico no significa nada. `llama3.1` (8B) lo muestra en el medio del camino —
+70.000 tokens y accuracy 0.125: ya actúa, pero no llega.
+
 ### 3.6 Observabilidad: perfil de comportamiento
 
 Más allá de la accuracy, instrumentamos **qué hace** el agente:

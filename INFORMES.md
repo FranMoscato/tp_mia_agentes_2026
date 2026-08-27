@@ -15,12 +15,20 @@ agrega la pieza que el juego va a exigir, y el último lo pone a jugar y lo mide
 
 ## Estado y próximo paso
 
-La serie está completa y los tres informes son estables. El **próximo paso del
-trabajo** es uno y ya está **todo cableado**: correr el eval de M3 en **Bedrock**
-(`nova-lite` como agente, `nova-pro` como judge), pendiente solo del lease de AWS.
-Con un modelo que sí llama herramientas, la accuracy deja de ser 0 y se encienden
-las métricas hoy degeneradas (pass^k, overhead-vs-óptimo, tokens/USD por éxito) y
-la kappa del judge deja de ser degenerada. Detalle en [INFORME_M3](INFORME_M3.md) §5.
+La serie está completa y los tres informes son estables. **El eval de M3 ya corrió
+en Bedrock**: `nova-lite` como agente (96 casos) y `nova-pro` como judge
+(cobertura 96/96), más una escalera de capacidad `nova-micro` → `nova-lite` →
+`nova-pro` y una de tamaño en local (`llama3.2` 3.2B → `llama3.1` 8B).
+
+**El hallazgo que ordena el trabajo:** el techo dejó de ser el modelo. La
+accuracy sube de 0/24 a 0.792 entre el modelo local y `nova-lite`, y **deja de
+subir** en `nova-pro`. El agente resuelve los 8 escenarios en algún intento
+(`pass@k` = 1.0) pero solo 5 de 8 en los tres (`pass^k` = 0.625): el límite es la
+**consistencia**, no la capacidad.
+
+El próximo paso apunta ahí, y ya sabemos por dónde **no** va: cortar loops en
+runtime y ampliar la ventana de memoria son dos experimentos que no movieron la
+accuracy (§4.4 y §4.5). Detalle en [INFORME_M3](INFORME_M3.md) §5.
 
 ## Cómo se regeneran los diagramas
 

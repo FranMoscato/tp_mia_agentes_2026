@@ -529,8 +529,49 @@ se rompe"*—: correr un segundo modelo destapó modos de fallo que uno solo
 escondía. Cada corrida versiona su `provider`/`model`, y
 `scripts/comparar_modelos_m3.py` arma la comparativa a partir de todas las
 corridas presentes —basta correr un modelo nuevo y volver a ejecutarlo. Corrimos
-`qwen2.5:3b` y `llama3.2` (Ollama, repeats-3); queda pendiente `nova-lite`
-(Bedrock, modelo fuerte).
+cinco: `qwen2.5:3b` y `llama3.2` (Ollama) y la familia Nova completa
+(`micro`, `lite`, `pro`) en Bedrock.
+
+#### La escalera de capacidad
+
+Entre `qwen2.5:3b` y `nova-lite` cambian **cuatro variables a la vez** —tamaño,
+cuantización, familia de entrenamiento y API—, así que ese contraste dice "el
+techo es del modelo" pero no *qué* del modelo. La familia Nova permite un
+contraste limpio: misma familia, misma API, mismo tratamiento, **solo cambia
+capacidad**. Sobre el brazo `react`:
+
+| Modelo | Accuracy | IC95% | Δ |
+|---|---:|---|---:|
+| `qwen2.5:3b` (local, Q4) | 0.000 | [0.000, 0.138] | — |
+| `nova-micro` | 0.250 | [0.120, 0.449] | +0.250 |
+| **`nova-lite`** | **0.792** | [0.595, 0.908] | **+0.542** |
+| `nova-pro` | 0.625 | [0.427, 0.788] | −0.167 |
+
+![Accuracy por modelo × configuración](docs/m3_cmp_accuracy.png)
+
+**La curva sube fuerte y después deja de subir.** Ese es el hallazgo que ordena
+todo el informe: **el cuello de botella ya no es el modelo**. Lo que falta para
+cerrar la brecha entre 0.792 y 1.0 hay que buscarlo en el diseño del agente, no
+en pagar por un modelo más grande.
+
+Con la salvedad obligatoria: **no afirmamos que `nova-pro` sea peor que
+`nova-lite`**. Los intervalos se solapan de lleno y con 24 casos por escalón esa
+caída de −0.167 es compatible con ruido. Lo afirmable es que **no mejora**, y eso
+contrasta limpiamente con el escalón anterior (+0.542, intervalos que apenas se
+tocan).
+
+Un dato que refuerza la lectura: `nova-pro` tiene **`pass@k` = 1.0 igual que
+`lite`** —resuelve los 8 escenarios en algún intento— pero **`pass^k` de 0.375
+contra 0.625**. Un modelo más capaz que resuelve lo mismo con *más* varianza
+apunta a que el límite está en la trayectoria, no en el razonamiento.
+
+**Lo que esta escalera NO autoriza a decir.** Que el techo sea del *tamaño*. La
+cuantización a 4 bits (`Q4_K_M`) de los dos modelos locales cambia junto con el
+tamaño, y golpea justo donde fallan —disciplina de tool-calling y salida
+estructurada—. Separar ambos ejes requiere correr `qwen2.5:7b` (mismo Q4, otro
+tamaño) y `qwen2.5:3b` sin cuantizar (mismo tamaño, otra precisión): §5.1.
+
+#### Cómo falla cada modelo
 
 **Hallazgo 1 — los dos modelos fallan de forma distinta.** No es el mismo 0/8:
 
@@ -543,20 +584,25 @@ corridas presentes —basta correr un modelo nuevo y volver a ejecutarlo. Corrim
 equivoca de objeto/argumento. **El "0/8" esconde dos patologías opuestas** —solo
 visibles porque medimos el comportamiento, no un número.
 
-**Hallazgo 2 — el efecto del resumen es *dependiente del modelo*.**
+**Hallazgo 2 — el orden de los brazos depende del modelo.** Es el resultado más
+interesante de la comparación cross-modelo, y un solo modelo lo habría ocultado:
 
-![Accuracy por modelo × configuración](docs/m3_cmp_accuracy.png)
+```
+nova-micro:   gate (0.42)  >  generico (0.29)  >  react (0.28)  ≈  summarizer (0.25)
+nova-lite:    react (0.79) >  gate (0.67)      >  generico (0.62)  >  summarizer (0.38)
+```
 
-La **única accuracy no-cero de toda la evaluación** es `llama3.2` + `summarizer`
-(**2/24 ≈ 0.083**). El resumen **ayuda** a un modelo que *actúa* (`llama3.2`:
-le da estado para no repetir), pero **perjudica** a uno que *no actúa*
-(`qwen`: §4.1, más latencia y loops, sin beneficio). Es decir, **la conclusión
-del Experimento 1 se invierte según el modelo** —un resultado que un solo modelo
-habría ocultado, y el argumento más fuerte para la comparación cross-modelo.
+**Con el modelo débil el `gate` gana; con el fuerte, `react` puro gana y el gate
+estorba.** No es ruido: es lo que la teoría del gate predice. Su función es
+suplir con reglas determinísticas lo que el modelo no sabe hacer solo —no usar
+objetos fuera del inventario, no inventar IDs—. Cuando el modelo es incapaz, esas
+barandas lo salvan; cuando es competente, las mismas barandas le cortan
+trayectorias válidas. El §4.2 lo cuantifica.
 
-La lectura para Bedrock: con un modelo que llame herramientas de forma
-confiable, esperamos que la accuracy despegue y que estos efectos
-(costo/limpieza/beneficio del resumen) se puedan medir sobre casos resueltos.
+El mismo patrón, más débil, aparecía con los modelos locales: la única accuracy
+no-cero del barrido local fue `llama3.2` + `summarizer` (2/24 ≈ 0.083), o sea el
+resumen ayudaba al modelo que *actuaba* y no al que *no actuaba*. Con Nova el
+efecto se invierte del todo: `summarizer` queda último en los tres escalones.
 
 ### 3.6 Observabilidad: perfil de comportamiento
 
@@ -631,21 +677,45 @@ despegar la accuracy—.
 
 ![Latencia p50/p95 por configuración](docs/m3_latencia.png)
 
-- **Resultado.** Accuracy **sin cambios** (0/24 vs 0/24), pero el resumen
-  **multiplica la latencia ~8×**: p95 **50.1 s** vs 6.1 s de `react` (la llamada
-  LLM extra por paso). Además **empeora los modos de fallo**: introduce 2
-  `tool_errors` y **3 `loop_detected`** que `react` no tiene (0 y 0) —re-inyectar
-  el estado resumido a veces refuerza una acción equivocada. No pudimos confirmar
-  la parte "ayuda en `extreme-archive`" de la hipótesis: con este modelo el
-  agente falla **aguas arriba** (prosa) y nunca llega a desbordar el contexto,
-  que es donde el resumen pagaría.
-- **Conclusión.** Con `qwen2.5:3b` el resumen es **costo puro** (perjudica). Pero
-  el efecto es **dependiente del modelo**: con `llama3.2` —que sí actúa— el
-  resumen **ayuda** y da la única accuracy no-cero de la evaluación (2/24, §3.5).
-  La lectura no es "el resumen es malo" sino "el resumen ayuda a un modelo que
-  actúa y estorba a uno que no" —lo que motiva el **summarizer selectivo** de §5.
-  La comparación cross-modelo fue clave para no sacar la conclusión equivocada
-  desde un solo modelo.
+- **Resultado.** El resumen **perjudica, y con significancia estadística**:
+
+  | | `react` | `summarizer` |
+  |---|---:|---:|
+  | Accuracy | **19/24 = 0.792** | 9/24 = 0.375 |
+  | `loop_detected` | 2 | **9** |
+  | Racha máx. de tool-calls repetidas | 15 | **23** |
+  | Tokens por resuelto | 143.340 | **481.678** |
+  | Latencia p95 | 31.1 s | **217.5 s** |
+  | Judge — "sin redundancia" | 0.58 | **0.21** |
+
+  Contraste estratificado por escenario (§2.3): **p = 0.0015** (CMH, 6 de 8
+  estratos informativos). El test agrupado da p = 0.0034; ambos coinciden, así
+  que acá la conclusión no depende del método.
+
+  ![Latencia p50/p95 por configuración](docs/m3_latencia.png)
+
+  **La hipótesis original se refuta en su propio terreno.** Esperábamos que el
+  resumen ayudara donde el contexto crudo no entra —`extreme-archive`, diseñado
+  para no caber en 16 K tokens—. Es exactamente donde peor le va: **0/9 en
+  `extreme`** contra 6/9 de `react` (§3.2). El resumen no es caro-pero-útil en el
+  horizonte largo: es caro **y** peor, y peor sobre todo ahí.
+
+- **Conclusión.** El mecanismo del daño quedó identificado y es el loop, no la
+  pérdida de información. Nueve de 24 casos terminan en `loop_detected` y la
+  racha máxima llega a **23 tool-calls idénticas consecutivas**: re-inyectar un
+  estado resumido en cada turno **no ancla al agente, lo encierra**. Si el
+  resumen omite el efecto de la última acción, el agente la repite, y el resumen
+  siguiente —derivado de esa misma interacción— vuelve a omitirlo.
+
+  Esto **corrige la conclusión que traía el informe**. Con los modelos locales
+  escribimos que el efecto del resumen era *dependiente del modelo* —ayudaba a
+  `llama3.2`, estorbaba a `qwen`— y que por eso convenía un summarizer
+  *selectivo*. Con la familia Nova el resumen queda último en los **tres**
+  escalones de capacidad (§3.5), incluido el más fuerte. La dependencia del
+  modelo era un artefacto de comparar dos modelos que fallaban por razones
+  distintas, ambos con accuracy casi nula. La conclusión ahora es más simple:
+  **este diseño de resumen perjudica**, y lo que habría que rediseñar no es
+  *cuándo* activarlo sino *qué* re-inyecta (§5).
 
 ### 4.2 Experimento 2 — Gate determinístico (gate on/off)
 
@@ -657,17 +727,50 @@ despegar la accuracy—.
   ~15 líneas y **0 tokens** debería eliminar `tool_errors`/uso inválido.
 - **Qué miramos.** Accuracy y desglose de modos de fallo (¿baja el uso inválido?),
   latencia (el gate no gasta tokens).
-- **Resultado.** Accuracy **sin cambios** (0/24): el gate **no puede forzar** que
-  el modelo emita un `tool_call` —solo bloquea las inválidas—, así que no cura la
-  prosa. **Pero deja el perfil de fallos más limpio de los tres:** `tool_errors`
-  **0** y `loop_detected` **0** sobre 24 casos, frente al `summarizer` (2
-  tool_errors + 3 loops). Y es incluso **ligeramente más rápido** que `react`
-  (p95 5.3 vs 6.1 s), a 0 tokens de costo.
-- **Conclusión.** El gate **entrega lo que el prompt no puede**: elimina por
-  construcción los fallos de uso inválido y los loops. No genera éxitos por sí
-  solo —eso requiere un modelo que llame herramientas—, pero es un **piso de
-  garantías gratis** sobre el que ese modelo rendiría mejor. Confirma la máxima:
-  *un `if` garantiza lo que ningún prompt garantiza*.
+- **Resultado — el efecto del gate se invierte según la capacidad del modelo.**
+  Es el hallazgo más interesante del §4:
+
+  | Modelo | `react` | `gate` | Δ | p (CMH) |
+  |---|---:|---:|---:|---:|
+  | `nova-micro` (débil) | 0.281 | **0.422** | **+0.141** | **0.0338** |
+  | `nova-lite` (fuerte) | **0.792** | 0.667 | −0.125 | 0.4219 |
+
+  Con el modelo **débil el gate ayuda de forma significativa**; con el fuerte no
+  ayuda (y la diferencia negativa no es significativa, así que no afirmamos que
+  perjudique). Eso es exactamente lo que la teoría del gate predice: **suple con
+  reglas determinísticas lo que el modelo no sabe hacer solo**. Si el modelo ya
+  es competente, las mismas barandas dejan de aportar.
+
+  **El efecto no es parejo: está concentrado.** El +0.141 promedio en `micro` no
+  viene de mejorar en todos lados —viene de **rescatar un escenario**:
+
+  | Escenario | `react` | `gate` | Δ |
+  |---|---:|---:|---:|
+  | `extreme-archive` | 1/8 | **7/8** | **+0.750** |
+  | `apartment-keys` | 6/8 | 8/8 | +0.250 |
+  | `study-with-key` | 6/8 | 8/8 | +0.250 |
+  | `color-locks` | 1/8 | 0/8 | −0.125 |
+  | `library-search` | 1/8 | 0/8 | −0.125 |
+
+  Reportar solo el promedio habría escondido esto. `extreme-archive` es el
+  escenario de 20 expedientes con prosa burocrática: el modelo débil se pierde
+  entre IDs parecidos y el gate le bloquea los inválidos antes de gastarlos.
+
+- **Nota metodológica — el análisis importaba tanto como los datos.** El
+  contraste en `micro` con el test de dos proporciones agrupado daba **p =
+  0.0957**: no concluyente. Estratificado por escenario da **p = 0.0338**. Son
+  **los mismos 128 casos**. Los brazos corren los mismos escenarios y el
+  escenario es la fuente dominante de varianza; agruparlo todo mete esa varianza
+  en el error estándar y tapa el efecto. Además, dos escenarios
+  (`backtracking-vault`, `vault-combination`) dan 0/8 en ambos brazos: no aportan
+  señal pero inflan el denominador del test agrupado.
+
+- **Conclusión.** El gate **entrega lo que el prompt no puede**, pero su valor
+  **depende de con qué modelo corras**. Es un piso de garantías gratis (0 tokens,
+  100 % determinístico) que paga cuando el modelo es propenso a acciones
+  inválidas, y se vuelve neutro —o un estorbo— cuando no lo es. La lectura para
+  el diseño: el gate no es una mejora incondicional del framework, es un
+  **seguro** cuyo valor esperado cae a medida que sube la capacidad del modelo.
 
 ### 4.3 Experimento 3 — Estrategia de prompting (escape-v1 vs. genérico)
 
@@ -677,28 +780,44 @@ despegar la accuracy—.
   ("sos un asistente que usa herramientas", sin reglas del dominio). `--configs
   react,react_generico`. En `cases.jsonl` cada caso registra qué prompt usó en el
   campo `prompt_version` (**`escape-v1`** = especializado; **`generico-v1`** =
-  genérico). Corrida **acotada** (4 escenarios, `--repeats 1`, `--max-iterations
-  12`) para no colgar el proveedor local; ambos brazos son idénticos salvo el
-  prompt (comparación apareada).
+  genérico). Ambos brazos son idénticos salvo el prompt, y en la corrida canónica
+  van los **8 escenarios × 3 repeats** (la versión anterior de este experimento
+  fue acotada a 4 escenarios y `repeats 1` para no colgar el proveedor local).
 - **Hipótesis.** `escape-v1` está lleno de reglas anti-prosa ("emití `tool_calls`,
   no texto"), así que debería **reducir** `prosa_en_vez_de_tool`, el modo dominante.
 - **Qué miramos.** Perfil de fallo (prosa vs. otros), cantidad de tool-calls,
   acciones inválidas.
-- **Resultado.** Ambos **0/4**: el prompt especializado **no rescata** al modelo
-  débil. Y la hipótesis **no se cumple** —`escape-v1` ni siquiera baja la prosa
-  (4/4 vs 3/4 del genérico)—. Lo que sí cambia es **el perfil**: `escape-v1` se
-  rinde **cauto y temprano** (**1.5** tool-calls de media, **0** acciones
-  inválidas, prosa por *inversión de rol*), mientras el genérico **actúa más pero
-  desprolijo** (**4.25** tool-calls, `invalid_action_rate` **0.12**, un
-  `tool_error`). El prompt de sala de escape compra **disciplina** (no inventa, no
-  se equivoca de objeto) a costa de rendirse antes; el genérico empuja a intentar
-  más, al costo de errores.
-- **Conclusión.** El prompt importa para **cómo** falla, no para **si** resuelve
-  —igual que el gate y el summarizer: con este modelo el techo es el modelo, no el
-  framework—. Salvedad de rigor: n=4, `repeats 1`, tope 12 → **descriptivo, no
-  significativo**. Con un modelo capaz (Bedrock) la pregunta interesante es si esa
-  disciplina del prompt especializado se traduce en **accuracy**, no solo en
-  perfil de fallo.
+- **Resultado.** El prompt especializado **sí se traduce en accuracy**:
+
+  | | `react` (`escape-v1`) | `react_generico` |
+  |---|---:|---:|
+  | Accuracy | **19/24 = 0.792** | 15/24 = 0.625 |
+  | `prosa_en_vez_de_tool` | **0** | 2 |
+  | `exhausted_iterations` | **3** | 7 |
+  | Tool-calls de media | 21.38 | 21.42 |
+  | `tool_errors` | 0 | 0 |
+
+  El delta es **+0.167**, pero **no alcanza significancia**: p = 0.204 agrupado,
+  **p = 0.277 estratificado** (CMH, 5 de 8 estratos informativos). Con 24 casos
+  por brazo un efecto de ese tamaño queda dentro del ruido.
+
+  Lo que sí es limpio es el **perfil de fallo**. La hipótesis original —que
+  `escape-v1` reduce la prosa— **se cumple**: 0 casos contra 2. Y aparece algo que
+  no habíamos previsto: el genérico se queda **sin iteraciones** más del doble de
+  veces (7 vs 3) gastando **la misma cantidad de tool-calls** (21.4 en ambos). No
+  actúa menos: actúa igual de mucho pero **peor dirigido**, y se le acaba el
+  presupuesto sin llegar.
+
+- **Conclusión.** El prompt de dominio compra **eficiencia de trayectoria**, no
+  capacidad de actuar. Ambos brazos llaman herramientas con la misma intensidad;
+  `escape-v1` llega más seguido porque las ordena mejor. Esto **actualiza la
+  conclusión anterior** —escrita con el modelo local, donde decíamos que el prompt
+  importaba para *cómo* falla y no para *si* resuelve—: con un modelo capaz sí
+  mueve la accuracy, aunque con n=24 no podamos declararlo significativo.
+
+  Es, además, el experimento que más se beneficiaría de más datos: es el único de
+  los tres donde el efecto apunta claro en una dirección y solo falta potencia
+  estadística para confirmarlo.
 
 ---
 

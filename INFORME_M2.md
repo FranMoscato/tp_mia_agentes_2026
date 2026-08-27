@@ -52,13 +52,13 @@ Lo implementado:
 - **Errores recuperables accionables** en la calculadora y el lector de archivos.
 - **Tracking de tokens** acumulado por `run`.
 
-**Estado de los tests:** toda la suite local pasa — **98 tests en verde**
-(excluyendo M3, que requiere el paquete `mia_world`, no presente en el repo). De
-esos 98, **21 son de M2**: 7 de conformidad (`tests/conformance/test_m2.py`) + 14
-propios (`tests/test_m2_propios.py`). Si se excluyen los **33 tests de los
-proveedores LLM** (`test_ollama_provider` + `test_bedrock_provider`, que validan
-el cliente fijo `mia_agents/llm_client.py`, no código de M2), quedan **65 tests**
-de nuestro código + el contrato de conformidad.
+**Estado de los tests:** toda la suite local pasa — hoy **249 tests en verde**,
+que incluyen los de M3 (cuando se escribió este informe eran 98: `mia_world`
+todavía no estaba en el repo, llegó con M3). De ese total, **21 son de M2**: 7 de
+conformidad (`tests/conformance/test_m2.py`) + 14 propios
+(`tests/test_m2_propios.py`). Aparte quedan los **33 tests de los proveedores
+LLM** (`test_ollama_provider` 15 + `test_bedrock_provider` 18), que validan el
+cliente fijo `mia_agents/llm_client.py` y no código nuestro.
 
 ```bash
 # Toda la suite local (98): excluye solo M3

@@ -41,9 +41,27 @@ usando cinco verbos (`look`, `examine`, `take`, `use`, `go`). Construimos una
 **infraestructura de evaluación reproducible** ([`eval/run.py`](eval/run.py))
 que corre el agente sobre los 8 escenarios, captura la traza completa por caso
 y produce métricas cuantitativas y una dimensión cualitativa vía LLM-as-judge
-([`eval/judge.py`](eval/judge.py)). Comparamos dos ejes del framework mediante
-experimentos controlados —**resumen de estado on/off** y **gate determinístico
-on/off**— y categorizamos los modos de fallo sobre trazas reales.
+([`eval/judge.py`](eval/judge.py)). Comparamos tres ejes del framework mediante
+experimentos controlados —**resumen de estado on/off**, **gate determinístico
+on/off** y **prompt especializado vs. genérico**— y categorizamos los modos de
+fallo sobre trazas reales.
+
+**Los cuatro resultados principales:**
+
+1. **El agente resuelve los 8 escenarios, pero no de forma confiable.** `pass@k`
+   = 1.0 contra `pass^k` = 0.625: el límite no es capacidad, es **consistencia**
+   (§3.1).
+2. **El cuello de botella dejó de ser el modelo.** Una escalera de capacidad
+   (`nova-micro` → `nova-lite` → `nova-pro`) muestra que la accuracy sube +0.542
+   y después **deja de subir**. Lo que falta hay que buscarlo en el diseño
+   (§3.5).
+3. **El resumen de estado perjudica, y sabemos por qué.** Mitad de accuracy,
+   3,4× el costo por resuelto y 7× la latencia p95 — y el mecanismo es que
+   **induce loops**: 9 de 24 casos, con rachas de hasta 23 tool-calls idénticas
+   (§4.1).
+4. **El gate vale según con qué modelo corras.** Ayuda al modelo débil
+   (+0.141, p=0.0338) y no al fuerte. No es una mejora incondicional: es un
+   **seguro** cuyo valor cae a medida que sube la capacidad (§4.2).
 
 ---
 
@@ -217,9 +235,19 @@ Todo sale de `python eval/run.py` sin pasos manuales. Cada corrida escribe
 `cases.jsonl` (traza por caso), `summary.json` y `summary.md`, y **versiona** en
 el meta: modelo (`BEDROCK_MODEL_ID`), cuenta/perfil AWS, versión de prompt y
 commit de git —sin esto, dos corridas de distintas máquinas serían
-indistinguibles. El núcleo de métricas, la búsqueda del óptimo y el judge están
-**testeados sin LLM** ([`tests/test_eval_harness.py`](tests/test_eval_harness.py),
-[`tests/test_judge.py`](tests/test_judge.py)).
+indistinguibles. El núcleo de métricas, la búsqueda del óptimo, el judge y los
+contrastes estadísticos están **testeados sin LLM**
+([`tests/test_eval_harness.py`](tests/test_eval_harness.py),
+[`tests/test_judge.py`](tests/test_judge.py),
+[`tests/test_eval_stats.py`](tests/test_eval_stats.py)).
+
+**Contrastes entre brazos.** Como los brazos corren los mismos escenarios, el
+diseño es de **bloques** y el test correcto estratifica por escenario
+(Cochran–Mantel–Haenszel, [`eval/stats.py`](eval/stats.py)); el agrupado mete la
+varianza entre escenarios en el error estándar y tapa efectos reales (§4).
+`python eval/comparar_brazos.py <cases.jsonl>` reporta **ambos** p-valores, el
+efecto escenario por escenario, y **cuántos estratos se descartaron** por no
+tener varianza —un p-valor sobre 4 de 8 estratos no es lo mismo que sobre 8—.
 
 ---
 
@@ -573,16 +601,21 @@ tamaño) y `qwen2.5:3b` sin cuantizar (mismo tamaño, otra precisión): §5.1.
 
 #### Cómo falla cada modelo
 
-**Hallazgo 1 — los dos modelos fallan de forma distinta.** No es el mismo 0/8:
+**Hallazgo 1 — el modo de fallo cambia de naturaleza con la capacidad.** No es
+que un modelo falle "más": fallan por razones distintas.
 
-| | `qwen2.5:3b` | `llama3.2` |
+| Modelo | Modo dominante | Uso de `use`/`go` |
 |---|---|---|
-| Modo de fallo dominante | **prosa** (no actúa) | **tool_errors** (actúa, pero inválido) |
-| Uso de `use`/`go` | ~0 | usa `use` y `go`, pero con errores |
+| `qwen2.5:3b` | **prosa** (no actúa) | ~0 |
+| `llama3.2` | **tool_errors** (actúa, pero inválido) | usa ambos, con errores |
+| `nova-lite` | **exhausted_iterations** / **loops** (actúa bien, no llega) | 92 `use`, 109 `go` (§3.6) |
 
-`qwen` se queda en describir la acción; `llama3.2` sí la intenta pero se
-equivoca de objeto/argumento. **El "0/8" esconde dos patologías opuestas** —solo
-visibles porque medimos el comportamiento, no un número.
+Los dos locales fallan **antes** del razonamiento: uno describe la acción en vez
+de emitirla, el otro se equivoca de objeto. Esos fallos no dicen nada sobre el
+diseño del agente. Con `nova-lite` el fallo se corre aguas abajo —el agente actúa
+correctamente pero se queda sin iteraciones o entra en loop—, y **recién ahí los
+experimentos del §4 miden el framework y no el modelo**. Era exactamente la
+condición que este informe necesitaba para poder concluir algo.
 
 **Hallazgo 2 — el orden de los brazos depende del modelo.** Es el resultado más
 interesante de la comparación cross-modelo, y un solo modelo lo habría ocultado:
@@ -606,49 +639,65 @@ efecto se invierte del todo: `summarizer` queda último en los tres escalones.
 
 ### 3.6 Observabilidad: perfil de comportamiento
 
-Para no reducir todo a "0/8", instrumentamos **qué hace** el agente:
+Más allá de la accuracy, instrumentamos **qué hace** el agente:
 
 ![Perfil de uso de herramientas por configuración](docs/m3_tools.png)
 
-- **Perfil de uso de herramientas.** El agente **explora pero rara vez
-  ejecuta**: domina `look`/`examine`, hace poco `take`, y en esta corrida
-  `use`=0 (react/gate) y `go`=0 en todos. Como abrir la puerta requiere `use`
-  (y los multi-sala requieren `go`), este perfil *es* la cara agregada del 0/8.
-  El mecanismo se ve en las trazas: en el punto de ejecutar, el agente
-  **describe la acción en prosa** en vez de emitirla —p. ej. escribe *"Haz uso
-  de la llave plateada en el cofre"* o *"`go(norte)`"* como texto, sin llamar la
-  herramienta. Es el mismo `prosa_en_vez_de_tool` visto desde el uso de tools.
-  **No es incapacidad:** en un smoke aislado el agente sí emitió
-  `use(llave, puerta)` y resolvió `study-with-key`; es **inconsistencia**, con
-  varianza entre corridas —otra razón para medir `pass^k` y no una sola corrida.
-- **Tasa de acción inválida** (`tool_errors/tool_calls`): `react` 0.0, `gate`
-  0.0, `summarizer` 0.03. Baja en todos porque el agente apenas llega a
-  intentar acciones que un gate rechazaría; el gate la mantiene en 0 por
-  construcción (el `summarizer`, que sí intenta más `use`, es el único con
-  acciones inválidas).
-- **Progreso parcial** (`items_taken`, `rooms_visited`, `items_opened`): con
-  `qwen2.5:3b` es ~0 (el agente se traba antes de avanzar). Esta métrica se
-  captura por corrida y será informativa con un modelo que sí actúe (Bedrock):
-  permite medir *cuánto* avanzó aunque no abra la puerta.
+- **Perfil de uso de herramientas.** Con `nova-lite` el agente **usa los cinco
+  verbos**, incluidos los dos que la corrida local nunca disparaba:
+
+  | Config | examine | go | look | use | take |
+  |---|---:|---:|---:|---:|---:|
+  | `react` | 159 | 109 | 93 | **92** | 60 |
+  | `gate` | 172 | 132 | 84 | 53 | 54 |
+  | `react_generico` | 163 | 147 | 98 | 64 | 42 |
+  | `summarizer` | 139 | 115 | 123 | 73 | 41 |
+
+  El contraste con la corrida local es el punto: allí `use` = 0 y `go` = 0 en
+  casi todos los brazos, y como abrir la puerta **requiere** `use`, ese perfil
+  *era* la cara agregada del 0/8. Ahora `react` emite 92 `use` y resuelve 19 de
+  24. Lo que antes leíamos como "el agente explora pero no ejecuta" era un límite
+  del modelo, no del diseño.
+
+  Dentro de los brazos, `react` es el que más `use` emite (92) y el que más
+  resuelve; `gate` emite casi la mitad (53) y **más `examine`** (172): el gate
+  bloquea usos inválidos, así que el agente gasta más turnos inspeccionando antes
+  de actuar. Es coherente con su mayor `exhausted_iterations` (7 vs. 3, §3.3).
+
+- **Tasa de acción inválida** (`tool_errors/tool_calls`): 0.000 en `react`,
+  `react_generico` y `summarizer`; **0.010 en `gate`**. Que el brazo con gate sea
+  el único con un valor no nulo es contraintuitivo y merece la aclaración: el
+  gate **rechaza** la acción antes de ejecutarla y ese rechazo se contabiliza
+  como error de herramienta, mientras que en los otros brazos la acción inválida
+  simplemente no llega a intentarse con este modelo.
+
+- **Progreso parcial** (promedio por caso): `react` toma 2.5 objetos, visita 2.5
+  salas y abre 2.0 contenedores; `summarizer` se queda en 1.6 / 2.2 / 1.0. La
+  métrica ya es informativa —con el modelo local era ~0 en todo— y ordena los
+  brazos igual que la accuracy, lo que da confianza en que mide avance real y no
+  actividad.
 
 **Costo en tokens** (agente vs. summarizer):
 
 ![Costo en tokens por configuración](docs/m3_costo.png)
 
-El summarizer suma **~6.100 tokens/caso (+65%)** sin resolver nada más. Además
-del conteo de tokens, el harness estima el **costo en USD** por caso y por caso
-resuelto (`cost_usd_*` en el `summary.json`), usando el pricing on-demand del
-modelo —$0 para modelos locales como `qwen2.5:3b`, y con precio real en Bedrock
-(`nova-lite`), donde el sobrecosto del resumen se traduce directamente en
-dólares.†
+Los **tokens por caso resuelto** son la métrica más honesta de eficiencia, y con
+éxitos reales por fin están definidos (con el modelo local eran una división por
+cero):
 
-Los **tokens por caso resuelto** son la métrica más honesta de eficiencia, pero
-exigen que haya éxitos: en la corrida canónica (`qwen2.5:3b`, 0/8) quedan
-**indefinidos** (división por cero) —lo cual, en sí, dice algo: no hay eficiencia
-que medir si nunca se resuelve—. El único punto con éxitos en todo el barrido es
-`llama3.2 + summarizer` (2/24), donde da **162.824 tokens por éxito**: un número
-enorme que muestra el precio real de "arrancar a resolver" con un modelo chico.
-Es justamente la métrica que se vuelve central con un modelo capaz en Bedrock.
+| Config | Tokens/resuelto | vs. `react` |
+|---|---:|---:|
+| `react_generico` | 114.328 | −20 % |
+| `react` | 143.340 | — |
+| `gate` | 161.362 | +13 % |
+| `summarizer` | **481.678** | **+236 %** |
+
+El `summarizer` cuesta **3,4× más por cada caso que resuelve**. Es la lectura más
+dura del Experimento 1: no es que sea caro y algo mejor, es caro **y** peor. El
+harness también estima el costo en USD por caso y por caso resuelto (`cost_usd_*`
+en el `summary.json`) usando el pricing on-demand del modelo — $0 para modelos
+locales, y con precio real en Bedrock, donde ese sobrecosto se traduce
+directamente en dólares.
 
 ---
 
@@ -658,11 +707,20 @@ Tres experimentos, cada uno aislando **una** pieza del framework: memoria (§4.1
 gate (§4.2) y prompt (§4.3). Son **comparaciones apareadas** en el sentido de la
 clase —*mismos escenarios, misma N (3 repeats), mismo entorno y modelo*—; solo
 cambia el eje bajo estudio, los demás quedan fijos. Eso es lo que permite atribuir
-una diferencia a la pieza y no al ruido. Salvedad de rigor: con la accuracy en 0/8
-las diferencias que reportamos son de **perfil de fallo**, no de accuracy, y las
-leemos como **descriptivas** —con n=8, *"una diferencia de pocos puntos no es una
-diferencia"*; la comparación estadística recién tiene sentido cuando Bedrock haga
-despegar la accuracy—.
+una diferencia a la pieza y no al ruido.
+
+**Cómo leemos la significancia.** Los brazos corren los **mismos** escenarios, así
+que el diseño es de bloques y el contraste correcto **estratifica por escenario**
+(Cochran–Mantel–Haenszel, [`eval/stats.py`](eval/stats.py)). No es un detalle:
+agrupar todos los casos de un brazo contra los del otro mete la varianza *entre
+escenarios* —que es la dominante: `easy` da 1.00 y `extreme` 0.14— dentro del
+error estándar y tapa efectos reales. En el Experimento 2 la diferencia es entre
+**p = 0.0957 (no concluyente) y p = 0.0338 (significativo)** sobre exactamente
+los mismos 128 casos. Reportamos ambos p-valores para que se vea.
+
+Además de los p-valores damos el **efecto por escenario**, porque el promedio
+esconde la forma: el gate no mejora parejo, **rescata un escenario puntual**
+(§4.2).
 
 ### 4.1 Experimento 1 — Resumen de estado (summarizer on/off)
 
@@ -825,12 +883,27 @@ despegar la accuracy—.
 
 **Limitaciones asumidas.**
 
-- **Modelo chico.** Con modelos chicos (`qwen2.5:3b` local; el piloto en
-  `nova-lite` mostró lo mismo), el modo de fallo dominante es de **disciplina de
-  tool-calling** (prosa en vez de acción), no de razonamiento espacial. Nuestros
-  resultados de accuracy están acotados por el modelo, no por el framework: por
-  eso el aporte de los experimentos se ve en **cómo** falla (latencia del resumen,
-  limpieza del gate), no en el 0/8. Un modelo más capaz debería mover el techo.
+- **Varianza entre corridas — la limitación que más pesa.** Con n=24 por brazo,
+  **dos corridas idénticas** del mismo brazo y el mismo modelo dieron **0.250 y
+  0.125** (`summarizer` en `nova-micro`; z=−1.11, p=0.267). La varianza
+  run-to-run es **del mismo orden que los efectos que medimos**, lo que explica
+  por qué dos de los tres experimentos del §4 no alcanzan significancia.
+
+  El remedio estándar sería fijar la semilla de muestreo para que los brazos
+  compartan la realización aleatoria. **Bedrock no lo permite**: verificamos que
+  `inferenceConfig.seed` da `ParamValidationError` y
+  `additionalModelRequestFields.seed` da `ValidationException`. Está implementado
+  para Ollama (la semilla se deriva de `(escenario, repeat)` y es igual en todos
+  los brazos, `eval/run.py`), pero en las corridas del informe **no está
+  disponible**. Es una limitación del proveedor, no del diseño.
+
+- **Ya no es el modelo.** Esta era la limitación principal del informe anterior
+  —"la accuracy está acotada por el modelo"— y la escalera de capacidad la
+  **cerró**: de `qwen2.5:3b` a `nova-lite` la accuracy salta +0.792, y de `lite` a
+  `pro` **no mejora** (§3.5). Lo que queda entre 0.792 y 1.0 es del diseño del
+  agente. Lo que **no** podemos afirmar es que el techo sea del *tamaño* del
+  modelo: entre los locales y Nova cambian tamaño, cuantización (`Q4_K_M`),
+  familia y API a la vez. Separarlo requiere las corridas de §5.1.
 - **Óptimo como referencia de eficiencia.** El overhead es relativo al óptimo
   **derivado por búsqueda**; es una medida de eficiencia, no una afirmación de
   minimalidad absoluta (aunque coincide con el enunciado en los 8/8).
@@ -840,86 +913,73 @@ despegar la accuracy—.
   tendencia central; las notas se amontonaban en 3)—. Los **corregimos**: judge
   **distinto** del agente (`llama3.2` juzga a `qwen`) y **checklist binario** (§2.2,
   §3.4). Además **corrimos la meta-eval (kappa)** contra una referencia
-  determinística: **κ ≈ 0** en los tres criterios (§3.4) — evidencia *medida* de
-  que el judge chico no es confiable. *Lo que queda* como limitación honesta:
-  (a) **capacidad del judge** — con modelos locales chicos el judge no es *más
-  capaz* que el agente, solo distinto; lo correcto es un judge fuerte (`nova-pro`
-  juzgando a `nova-lite`); (b) el **kappa medido es frágil**: con 8 trazas fallidas
-  la referencia satura y parte de los κ=0 son degenerados por falta de varianza —una
-  kappa definitiva necesita trazas con variación real; (c) **no medimos
-  self-preference** (requiere comparar puntajes de las mismas trazas bajo judge
-  propio vs ajeno). Con un judge chico, sus puntajes son indicativos, no confiables.
+  determinística. *Lo que queda* como limitación honesta:
+
+  (a) **La referencia, no el judge.** Con `nova-pro` —fuerte, distinto del agente,
+  sobre 96 trazas con variación real— **dos de los tres criterios siguen en
+  κ≈0**. El diagnóstico anterior ("el judge chico no es confiable") era
+  incompleto: nuestra `reference_verdict` marca "sí" en el **96–97 %** de los
+  casos en `exploracion_ordenada` y `acciones_apoyadas`, así que ahí **no puede
+  discriminar** y κ mide la degeneración de la referencia, no la calidad del
+  judge. En el único criterio donde la referencia reparte (`sin_redundancia`,
+  0.66) el judge llega a **κ = 0.55**, acuerdo moderado. Arreglarlo es endurecer
+  los umbrales de la referencia, no cambiar el judge.
+
+  (b) **No medimos self-preference** (requiere comparar puntajes de las mismas
+  trazas bajo judge propio vs. ajeno).
 - **Escala del dataset.** 8 escenarios: los intervalos de confianza son anchos.
-  pass^k y Wilson lo hacen explícito, pero no lo eliminan.
+  pass^k y Wilson lo hacen explícito, pero no lo eliminan. Agrava el problema que
+  varios estratos **se saturan** —mismo resultado en ambos brazos— y por lo tanto
+  no aportan al contraste: con `nova-lite` el Experimento 2 se queda con 4
+  estratos informativos de 8. Para el mismo presupuesto, **un escenario nuevo de
+  dificultad intermedia rinde más que un repeat extra**: el repeat achica el
+  error dentro de estratos que ya tenés, el escenario agrega un estrato. (No
+  ampliamos el dataset porque está fijado por la cátedra y es lo que hace
+  comparables a los grupos entre sí.)
+
+- **El split dev/holdout está desbalanceado.** La etiqueta `extreme` agrupa
+  escenarios muy distintos: `extreme-archive` (óptimo 4) contra
+  `vault-combination` (21) y `backtracking-vault` (18). Como dev aporta solo el
+  primero, la brecha dev/holdout (0.729 vs 0.500) es un artefacto de composición
+  y no una señal de sobreajuste —de hecho en `medium` y `hard` el holdout rinde
+  **mejor** (§3.2).
 - **`max_iterations = 30` es del harness**, no del enunciado: lo subimos para que
   el techo de iteraciones no sesgue la accuracy (`vault-combination` necesita 21).
 
 **Qué construiríamos a continuación.**
 
-> **➡️ Próximo paso inmediato (desbloquea a casi todos los demás): correr el eval
-> completo en Bedrock.** Es lo único que falta y ya está **todo cableado**
-> (`eval/run.py` toma el provider del `.env`; ver Apéndice A): solo depende del
-> **lease de AWS**. Con `nova-lite` como agente —un modelo que **sí** llama
-> herramientas— la accuracy deja de ser 0 y **se encienden las métricas hoy
-> degeneradas** (pass^k, overhead-vs-óptimo sobre resueltos, tokens/USD por éxito);
-> con `nova-pro` como judge y trazas con variación, la **kappa deja de ser
-> degenerada** (§3.4). Recién ahí se separa limpio *framework* de *modelo* y se
-> puede confiar en los puntajes del judge. Los pasos 1–4 de abajo se miden mejor
-> una vez hecho esto.
+> **➡️ Próximo paso inmediato: atacar la CONSISTENCIA, no la capacidad.** El
+> agente ya resuelve los 8 escenarios en algún intento (`pass@k` = 1.0) pero solo
+> 5 de 8 en los tres (`pass^k` = 0.625), y subir de modelo ya no mueve la aguja
+> (§3.5). Todo lo que sigue apunta a cerrar esa brecha.
 
-**Checklist para el equipo — qué correr con Bedrock (todo ya cableado).** Con el
-lease de AWS y el `.env` apuntando a Bedrock (`BEDROCK_MODEL_ID`, `AWS_PROFILE`,
-`AWS_REGION`):
+1. **Rediseñar el summarizer, no desactivarlo selectivamente.** El §4.1 identificó
+   el mecanismo del daño: **el resumen induce loops** (9 de 24 casos, rachas de
+   hasta 23 tool-calls idénticas). No es pérdida de información, es
+   realimentación: si el resumen omite el efecto de la última acción, el agente la
+   repite y el resumen siguiente vuelve a omitirlo. La corrección natural es que
+   el `GameState` incluya explícitamente **qué se intentó y con qué resultado**
+   —no solo el estado alcanzado— para que repetir sea visible desde el propio
+   resumen. El "summarizer selectivo" que proponíamos antes atacaba el síntoma
+   (costo) y no la causa.
 
-1. **Eval completo (agente `nova-lite`).** Enciende accuracy + todas las métricas
-   degeneradas. Corre los 4 brazos —incluida la **ablación de prompt**
-   (`react_generico`)— sin hacer nada extra:
-   ```bash
-   python eval/run.py --repeats 3
-   ```
-   *(Para ahorrar costo sin la ablación: `--configs react,summarizer,gate`.)*
-2. **Judge fuerte y distinto (`nova-pro` juzga a `nova-lite`)** + meta-eval kappa.
-   Es lo que saca la κ de ≈0 y valida (o no) los puntajes del judge:
-   ```bash
-   python eval/judge.py eval/results/<ts>/cases.jsonl \
-     --judge-provider bedrock --judge-model amazon.nova-pro-v1:0
-   python eval/kappa.py  eval/results/<ts>/cases.jsonl   # o sobre eval/golden/
-   ```
-3. **Barridos de hiperparámetros** (ahora expuestos): tope de iteraciones y
-   **ventana de memoria** —el experimento de contexto que hoy no se puede medir
-   porque el modelo chico no llena la ventana—:
-   ```bash
-   python eval/run.py --configs react --max-iterations 20   # vs 30
-   python eval/run.py --configs react --max-history-messages 20   # vs 50
-   ```
-4. **Comparativas cross-modelo.** Se arman solas: la corrida de Bedrock se suma a
-   los gráficos junto a qwen/llama3.2 (agrupa por `provider/model`):
-   ```bash
-   python scripts/comparar_modelos_m3.py
-   ```
-5. **Reproducir el hallazgo del judge** (opcional): el modo per-criterio (4.4) con
-   un judge fuerte, para ver si con `nova-pro` **sí** funciona (a diferencia del
-   local): `python eval/judge.py … --judge-provider bedrock --judge-model
-   amazon.nova-pro-v1:0 --per-criterion`.
+2. **Endurecer la referencia del judge.** El §3.4 mostró que la κ≈0 viene de que
+   `reference_verdict` marca "sí" en el 96–97 % de los casos en dos criterios. Con
+   umbrales que repartan (p. ej. exigir que `look` preceda a *toda* acción sobre
+   un objeto no observado, en vez de solo a la primera), la meta-eval vuelve a ser
+   informativa. **No hace falta un judge mejor** —ya lo tenemos—, hace falta una
+   referencia que discrimine.
 
-Y sobre esos resultados, lo que **construiríamos** después:
+3. **Gate adaptativo.** El §4.2 mostró que el gate ayuda al modelo débil
+   (+0.141, p=0.0338) y no al fuerte. En vez de activarlo o no, medir su valor por
+   escenario: en `extreme-archive` da +0.750. Un gate que se encienda donde el
+   espacio de IDs es grande y ambiguo, y se apague donde no, captura el beneficio
+   sin el costo.
 
-1. **Gate más rico** (si el Experimento 2 lo respalda): extender las garantías
-   determinísticas a más precondiciones del mundo, y medir hasta dónde el gate
-   sustituye prompt.
-2. **Summarizer selectivo:** activar el resumen **solo** cuando el contexto crudo
-   desborda, en vez de siempre —convirtiendo el hallazgo del Experimento 1 en una
-   política.
-3. **Planner explícito vs. ReAct** en `office-sequence` (goal compuesto/ordenado):
-   el escenario premia descomponer y planificar el orden de sub-objetivos.
-4. **Calibrar el judge (una vez corrido Bedrock).** Ya lo hicimos **distinto** del
-   agente, con **checklist binario**, y **medimos la kappa** contra una referencia
-   determinística (κ ≈ 0: el judge chico no es confiable, §3.4). Lo que falta
-   depende del próximo paso: un judge **más capaz** (`nova-pro`) y **trazas con
-   variación real** (éxitos, trayectorias largas) para que la kappa deje de ser
-   degenerada y recién ahí confiar en sus puntajes. **El wiring ya está**
-   (`--judge-provider bedrock --judge-model nova-pro`, ver Apéndice A); solo falta
-   el lease.
+4. **Planner explícito vs. ReAct** en `office-sequence` (goal compuesto/ordenado):
+   el escenario premia descomponer y planificar el orden de sub-objetivos, y es de
+   los que más `exhausted_iterations` produce.
+
 5. **Memoria más allá de la de trabajo (CoALA).** Hoy el agente usa solo
    **memoria de trabajo** (la ventana). Sumar memoria **episódica** (aprender
    entre escenarios: "en la sala anterior la llave estaba bajo la alfombra") o
@@ -943,26 +1003,21 @@ tool-calling y el structured output—.
 Para cerrarlo hacen falta dos escaleras, cada una moviendo **una sola
 variable**:
 
-**Escalera A — capacidad** (Bedrock; familia, API y tratamiento constantes):
+**Escalera A — capacidad** (Bedrock; familia, API y tratamiento constantes).
+**Ya corrida**, y es la que responde la pregunta central del informe (§3.5):
 
-| Modelo | Costo de la corrida completa |
-|---|---:|
-| `amazon.nova-micro-v1:0` | $0.44 |
-| `amazon.nova-lite-v1:0` | $0.75 — **ya corrida (0.792)** |
-| `amazon.nova-pro-v1:0` | $10.00 completa · **$2.25 solo brazo `react`** |
+| Modelo | Accuracy (`react`) | Costo real |
+|---|---:|---:|
+| `amazon.nova-micro-v1:0` | 0.250 | $0.45 |
+| `amazon.nova-lite-v1:0` | **0.792** | $0.75 |
+| `amazon.nova-pro-v1:0` | 0.625 | $2.40 (solo brazo `react`) |
 
-```bash
-python eval/run.py --repeats 3   # con BEDROCK_MODEL_ID=amazon.nova-micro-v1:0
-python eval/run.py --configs react --repeats 3   # con ...=amazon.nova-pro-v1:0
-```
+La curva sube +0.542 y después **deja de subir**: el cuello de botella ya no es
+el modelo. `nova-pro` se corrió solo sobre `react` porque los otros tres brazos
+ya están medidos con `nova-lite`, que es donde se compara la **arquitectura**
+(corrida completa con `pro` habría costado $10).
 
-`nova-pro` como agente solo se corre sobre `react`: los otros tres brazos ya
-están medidos con `nova-lite`, que es donde se compara la **arquitectura**. La
-pregunta que responde esta escalera es si la curva **se aplana**: si `nova-pro`
-apenas mejora sobre `nova-lite`, el cuello de botella deja de ser el modelo y
-vuelve a ser el framework.
-
-**Escalera B — tamaño** (Ollama; cuantización Q4_K_M constante):
+**Escalera B — tamaño** (Ollama; cuantización Q4_K_M constante). **Pendiente:**
 
 | Modelo | Parámetros | Estado |
 |---|---:|---|
@@ -1004,30 +1059,41 @@ OLLAMA_HOST=http://localhost:11434 OLLAMA_MODEL=qwen2.5:3b \
 set -a && . ./.env && set +a
 python eval/run.py --repeats 3          # toma el provider del .env
 
-# Experimento 3 (ablación de prompt): escape-v1 vs. genérico
-python eval/run.py --configs react,react_generico --repeats 1 --max-iterations 12
+# Escalera de capacidad (§3.5): mismo comando cambiando el modelo
+BEDROCK_MODEL_ID=amazon.nova-micro-v1:0 python eval/run.py --repeats 3
+BEDROCK_MODEL_ID=amazon.nova-pro-v1:0   python eval/run.py --configs react --repeats 3
 
-# Dimensión cualitativa (LLM-as-judge) sobre una corrida (judge DISTINTO del agente)
-python eval/judge.py eval/results/<timestamp>/cases.jsonl --judge-model llama3.2
-
-# Meta-eval del judge: kappa de Cohen vs. referencia determinística (sobre el golden)
-python eval/judge.py eval/golden/cases.jsonl --judge-model llama3.2
-python eval/kappa.py  eval/golden/cases.jsonl
-
-# Judge FUERTE del próximo paso #1 (nova-pro juzgando a nova-lite, requiere Bedrock)
-python eval/judge.py eval/golden/cases.jsonl \
+# Judge FUERTE (nova-pro juzgando a nova-lite) + meta-eval kappa
+# OJO: el id va SIN el prefijo `us.`. `us.amazon.nova-pro-v1:0` es un inference
+# profile cross-region que puede rutear a us-west-2, y la SCP de la organización
+# lo bloquea con deny explícito. Peor: judge.py captura la excepción por caso y
+# devuelve None, así que el fallo se ve como `n: 0` con exit code 0.
+python eval/judge.py eval/results/<timestamp>/cases.jsonl \
   --judge-provider bedrock --judge-model amazon.nova-pro-v1:0
-python eval/kappa.py  eval/golden/cases.jsonl
+python eval/kappa.py  eval/results/<timestamp>/cases.jsonl
+
+# Contrastes entre brazos ESTRATIFICADOS por escenario (§4). Es el test correcto
+# para este diseño de bloques; el agrupado tapa efectos reales (gate: 0.0957 vs
+# 0.0338 sobre los MISMOS datos). Acepta varias corridas para agregar.
+python eval/comparar_brazos.py eval/results/<timestamp>/cases.jsonl
 
 # Reproducir el hallazgo: el modo per-criterio (4.4) colapsa con judge débil
 python eval/judge.py eval/golden/cases.jsonl --judge-model llama3.2 --per-criterion
 
-# Gráficos de UNA corrida
-python scripts/generar_graficos_m3.py
+# Gráficos de UNA corrida (--results para elegir cuál; por defecto, la última)
+python scripts/generar_graficos_m3.py --results eval/results/<timestamp>
 
 # Gráficos COMPARANDO todos los modelos/proveedores corridos
 python scripts/comparar_modelos_m3.py
 ```
+
+**Acceso a AWS.** El sandbox usa SSO y **no** claves estáticas: las que ofrece el
+portal duran ~55 min y cortan una corrida a la mitad (nos costó 22 casos). La
+config va en `~/.aws/config` con `sso_session`, y el login es
+`aws sso login --sso-session <nombre> --use-device-code`. El flag
+`--use-device-code` **no es opcional**: el flujo PKCE que la CLI usa por defecto
+es rechazado por este Identity Center. Ojo también con que la región del
+Identity Center (`sso_region`) puede no ser la de Bedrock (`region`).
 
 Salidas en `eval/results/<timestamp>/`: `cases.jsonl`, `summary.json`,
 `summary.md`. Cada corrida versiona `provider`/`model` en su meta, así la

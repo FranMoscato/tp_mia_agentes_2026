@@ -1,0 +1,308 @@
+[
+  {
+    "base": "react",
+    "comparado": "summarizer",
+    "base_n": "18/64",
+    "base_acc": 0.281,
+    "base_ci": [
+      0.186,
+      0.401
+    ],
+    "comp_n": "6/24",
+    "comp_acc": 0.25,
+    "comp_ci": [
+      0.12,
+      0.449
+    ],
+    "delta": -0.031,
+    "z_agrupado": -0.293,
+    "p_agrupado": 0.76941,
+    "cmh": {
+      "chi2": 0.0009,
+      "p": 0.97589,
+      "estratos_usados": [
+        "study-with-key",
+        "color-locks",
+        "library-search",
+        "extreme-archive",
+        "apartment-keys",
+        "office-sequence"
+      ],
+      "estratos_descartados": [
+        "vault-combination",
+        "backtracking-vault"
+      ]
+    },
+    "por_escenario": [
+      {
+        "escenario": "color-locks",
+        "base": "1/8",
+        "base_acc": 0.125,
+        "comp": "1/3",
+        "comp_acc": 0.333,
+        "delta": 0.208
+      },
+      {
+        "escenario": "vault-combination",
+        "base": "0/8",
+        "base_acc": 0.0,
+        "comp": "0/3",
+        "comp_acc": 0.0,
+        "delta": 0.0
+      },
+      {
+        "escenario": "backtracking-vault",
+        "base": "0/8",
+        "base_acc": 0.0,
+        "comp": "0/3",
+        "comp_acc": 0.0,
+        "delta": 0.0
+      },
+      {
+        "escenario": "office-sequence",
+        "base": "3/8",
+        "base_acc": 0.375,
+        "comp": "1/3",
+        "comp_acc": 0.333,
+        "delta": -0.042
+      },
+      {
+        "escenario": "study-with-key",
+        "base": "6/8",
+        "base_acc": 0.75,
+        "comp": "2/3",
+        "comp_acc": 0.667,
+        "delta": -0.083
+      },
+      {
+        "escenario": "apartment-keys",
+        "base": "6/8",
+        "base_acc": 0.75,
+        "comp": "2/3",
+        "comp_acc": 0.667,
+        "delta": -0.083
+      },
+      {
+        "escenario": "library-search",
+        "base": "1/8",
+        "base_acc": 0.125,
+        "comp": "0/3",
+        "comp_acc": 0.0,
+        "delta": -0.125
+      },
+      {
+        "escenario": "extreme-archive",
+        "base": "1/8",
+        "base_acc": 0.125,
+        "comp": "0/3",
+        "comp_acc": 0.0,
+        "delta": -0.125
+      }
+    ],
+    "_titulo": "Experimento 1 — resumen de estado on/off"
+  },
+  {
+    "base": "react",
+    "comparado": "gate",
+    "base_n": "18/64",
+    "base_acc": 0.281,
+    "base_ci": [
+      0.186,
+      0.401
+    ],
+    "comp_n": "27/64",
+    "comp_acc": 0.422,
+    "comp_ci": [
+      0.309,
+      0.544
+    ],
+    "delta": 0.141,
+    "z_agrupado": 1.666,
+    "p_agrupado": 0.09569,
+    "cmh": {
+      "chi2": 4.507,
+      "p": 0.03376,
+      "estratos_usados": [
+        "study-with-key",
+        "color-locks",
+        "library-search",
+        "extreme-archive",
+        "apartment-keys",
+        "office-sequence"
+      ],
+      "estratos_descartados": [
+        "vault-combination",
+        "backtracking-vault"
+      ]
+    },
+    "por_escenario": [
+      {
+        "escenario": "extreme-archive",
+        "base": "1/8",
+        "base_acc": 0.125,
+        "comp": "7/8",
+        "comp_acc": 0.875,
+        "delta": 0.75
+      },
+      {
+        "escenario": "study-with-key",
+        "base": "6/8",
+        "base_acc": 0.75,
+        "comp": "8/8",
+        "comp_acc": 1.0,
+        "delta": 0.25
+      },
+      {
+        "escenario": "apartment-keys",
+        "base": "6/8",
+        "base_acc": 0.75,
+        "comp": "8/8",
+        "comp_acc": 1.0,
+        "delta": 0.25
+      },
+      {
+        "escenario": "office-sequence",
+        "base": "3/8",
+        "base_acc": 0.375,
+        "comp": "4/8",
+        "comp_acc": 0.5,
+        "delta": 0.125
+      },
+      {
+        "escenario": "vault-combination",
+        "base": "0/8",
+        "base_acc": 0.0,
+        "comp": "0/8",
+        "comp_acc": 0.0,
+        "delta": 0.0
+      },
+      {
+        "escenario": "backtracking-vault",
+        "base": "0/8",
+        "base_acc": 0.0,
+        "comp": "0/8",
+        "comp_acc": 0.0,
+        "delta": 0.0
+      },
+      {
+        "escenario": "color-locks",
+        "base": "1/8",
+        "base_acc": 0.125,
+        "comp": "0/8",
+        "comp_acc": 0.0,
+        "delta": -0.125
+      },
+      {
+        "escenario": "library-search",
+        "base": "1/8",
+        "base_acc": 0.125,
+        "comp": "0/8",
+        "comp_acc": 0.0,
+        "delta": -0.125
+      }
+    ],
+    "_titulo": "Experimento 2 — gate determinístico on/off"
+  },
+  {
+    "base": "react",
+    "comparado": "react_generico",
+    "base_n": "18/64",
+    "base_acc": 0.281,
+    "base_ci": [
+      0.186,
+      0.401
+    ],
+    "comp_n": "7/24",
+    "comp_acc": 0.292,
+    "comp_ci": [
+      0.149,
+      0.492
+    ],
+    "delta": 0.01,
+    "z_agrupado": 0.096,
+    "p_agrupado": 0.92312,
+    "cmh": {
+      "chi2": 0.0464,
+      "p": 0.82945,
+      "estratos_usados": [
+        "study-with-key",
+        "color-locks",
+        "library-search",
+        "extreme-archive",
+        "apartment-keys",
+        "office-sequence"
+      ],
+      "estratos_descartados": [
+        "vault-combination",
+        "backtracking-vault"
+      ]
+    },
+    "por_escenario": [
+      {
+        "escenario": "extreme-archive",
+        "base": "1/8",
+        "base_acc": 0.125,
+        "comp": "2/3",
+        "comp_acc": 0.667,
+        "delta": 0.542
+      },
+      {
+        "escenario": "apartment-keys",
+        "base": "6/8",
+        "base_acc": 0.75,
+        "comp": "3/3",
+        "comp_acc": 1.0,
+        "delta": 0.25
+      },
+      {
+        "escenario": "vault-combination",
+        "base": "0/8",
+        "base_acc": 0.0,
+        "comp": "0/3",
+        "comp_acc": 0.0,
+        "delta": 0.0
+      },
+      {
+        "escenario": "backtracking-vault",
+        "base": "0/8",
+        "base_acc": 0.0,
+        "comp": "0/3",
+        "comp_acc": 0.0,
+        "delta": 0.0
+      },
+      {
+        "escenario": "study-with-key",
+        "base": "6/8",
+        "base_acc": 0.75,
+        "comp": "2/3",
+        "comp_acc": 0.667,
+        "delta": -0.083
+      },
+      {
+        "escenario": "color-locks",
+        "base": "1/8",
+        "base_acc": 0.125,
+        "comp": "0/3",
+        "comp_acc": 0.0,
+        "delta": -0.125
+      },
+      {
+        "escenario": "library-search",
+        "base": "1/8",
+        "base_acc": 0.125,
+        "comp": "0/3",
+        "comp_acc": 0.0,
+        "delta": -0.125
+      },
+      {
+        "escenario": "office-sequence",
+        "base": "3/8",
+        "base_acc": 0.375,
+        "comp": "0/3",
+        "comp_acc": 0.0,
+        "delta": -0.375
+      }
+    ],
+    "_titulo": "Experimento 3 — prompt escape-v1 vs. genérico"
+  }
+]

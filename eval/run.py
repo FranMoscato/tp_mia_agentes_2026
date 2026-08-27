@@ -80,6 +80,10 @@ CONFIGS: dict[str, dict[str, Any]] = {
     # usa tools). Comparar aísla cuánto aporta el prompt de sala de escape.
     # `prompt_generico` lo consume run_one (no build_agent).
     "react_generico": {"use_summarizer": False, "prompt_generico": True},
+    # Experimento #4 (corte de loop): "react" es el OFF. `loop_breaker` aplica la
+    # señal de loop de la Clase 7 EN RUNTIME —a la 3ra llamada idéntica devuelve
+    # una observación en vez de re-ejecutar— en vez de solo medirla a posteriori.
+    "loop_breaker": {"use_summarizer": False, "loop_breaker": True},
 }
 
 # Tope de iteraciones para el eval. El default del agente (20) no alcanza para
@@ -713,6 +717,7 @@ def run_one(
         # anterior. > 0 significa que el resumen quedó congelado en algún
         # tramo: la corrida es válida, pero el brazo `summarizer` no operó al
         # 100 % ahí. Sin esto, la degradación sería invisible.
+        "loops_cortados": getattr(agent, "loops_cortados", 0),
         "memory_failures": getattr(agent, "memory_failures", 0),
         "last_memory_error": getattr(agent, "last_memory_error", None),
         "latency_s": latency,

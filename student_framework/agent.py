@@ -414,6 +414,8 @@ class MyAgent:
         max_retries: int = 3,
         retry_backoff_base: float = 0.5,
         use_summarizer: bool = False,
+        loop_breaker: bool = False,
+        loop_threshold: int = 3,
         tool_gate: Callable[[str, dict[str, Any]], str | None] | None = None,
     ) -> None:
         """Inicializa el agente.
@@ -480,6 +482,17 @@ class MyAgent:
         # anexamos el addendum al system prompt para que el agente sepa leer el
         # bloque "ESTADO ACTUAL DE LA PARTIDA".
         self._use_summarizer = use_summarizer
+        # Corte de loop (Clase 7). `loop_threshold` = cuántas llamadas
+        # idénticas consecutivas se toleran antes de intervenir. 3 es el
+        # mismo umbral que usa el harness para categorizar `loop_detected`
+        # (LOOP_THRESHOLD en eval/run.py): repetir UNA vez puede ser un
+        # reintento razonable, a la TERCERA ya no hay corrección posible.
+        self._loop_breaker = loop_breaker
+        self._loop_threshold = loop_threshold
+        self._ultima_firma: tuple[str, str] | None = None
+        self._repeticiones = 0
+        # Veces que el corte intervino en el último `run()`.
+        self.loops_cortados = 0
         self._state = GameState()
         if use_summarizer:
             self._system = system_prompt + SUMMARIZER_PROMPT_ADDENDUM
@@ -562,6 +575,9 @@ class MyAgent:
         self.memory_latency_s = 0.0
         self.memory_failures = 0
         self.last_memory_error = None
+        self.loops_cortados = 0
+        self._ultima_firma = None
+        self._repeticiones = 0
         self.llm_calls = 0
 
         # Esquemas de las herramientas a exponer al LLM
@@ -601,7 +617,36 @@ class MyAgent:
 
             # Ejecutar cada herramienta pedida y guardar su resultado.
             for call in response.tool_calls:
-                tool_output, error = self._ejecutar_tool(call)
+                # Corte de loop (M3, opcional): la señal de loop de la Clase 7 es
+                # la **repetición de la firma tool + argumentos**. El harness ya
+                # la medía a posteriori (`repeticiones_consecutivas`), pero el
+                # agente no hacía nada con ella: seguía repitiendo hasta agotar
+                # `max_iterations` —medimos rachas de hasta 23 llamadas
+                # idénticas—. Acá la usamos EN RUNTIME: a la N-ésima repetición
+                # no se ejecuta la tool otra vez, se devuelve una observación
+                # que le dice al modelo que está repitiendo.
+                #
+                # Es un empujón, no un corte: el loop sigue vivo y el modelo
+                # puede corregir. Detrás de flag (`loop_breaker`, default False)
+                # para no cambiar el baseline `react` de las corridas previas.
+                firma = (call.name, str(call.arguments))
+                if self._loop_breaker and firma == self._ultima_firma:
+                    self._repeticiones += 1
+                else:
+                    self._repeticiones = 1
+                    self._ultima_firma = firma
+
+                if self._loop_breaker and self._repeticiones >= self._loop_threshold:
+                    self.loops_cortados += 1
+                    tool_output = (
+                        f"[bucle detectado] Ya llamaste `{call.name}` con estos "
+                        f"mismos argumentos {self._repeticiones} veces seguidas y "
+                        f"el resultado no cambió. No la vuelvas a llamar igual: "
+                        f"probá otra herramienta, otros argumentos, u otro objeto."
+                    )
+                    error = None
+                else:
+                    tool_output, error = self._ejecutar_tool(call)
 
                 # El resultado (o el error) debe volver al LLM como contexto
 

@@ -55,6 +55,12 @@ def build_agent(config: dict[str, Any] | None = None) -> Agent:
     # "resumen on/off" se corre pasando use_summarizer por config.
     if "use_summarizer" in config:
         kwargs["use_summarizer"] = config["use_summarizer"]
+    # Corte de loop en runtime (Clase 7): mismo patrón, detrás de config para
+    # no cambiar el baseline `react`.
+    if "loop_breaker" in config:
+        kwargs["loop_breaker"] = config["loop_breaker"]
+    if "loop_threshold" in config:
+        kwargs["loop_threshold"] = config["loop_threshold"]
 
     # System prompt inyectable: el default de MyAgent es genérico (M1/M2). El
     # runner de la sala de escape (M3) pasa ESCAPE_ROOM_SYSTEM_PROMPT por acá.

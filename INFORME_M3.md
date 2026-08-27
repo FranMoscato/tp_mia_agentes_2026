@@ -41,10 +41,11 @@ usando cinco verbos (`look`, `examine`, `take`, `use`, `go`). Construimos una
 **infraestructura de evaluación reproducible** ([`eval/run.py`](eval/run.py))
 que corre el agente sobre los 8 escenarios, captura la traza completa por caso
 y produce métricas cuantitativas y una dimensión cualitativa vía LLM-as-judge
-([`eval/judge.py`](eval/judge.py)). Comparamos tres ejes del framework mediante
+([`eval/judge.py`](eval/judge.py)). Comparamos cinco ejes del framework mediante
 experimentos controlados —**resumen de estado on/off**, **gate determinístico
-on/off** y **prompt especializado vs. genérico**— y categorizamos los modos de
-fallo sobre trazas reales.
+on/off**, **prompt especializado vs. genérico**, **corte de loop en runtime** y
+**tamaño de la ventana de memoria**— y categorizamos los modos de fallo sobre
+trazas reales.
 
 **Los cuatro resultados principales:**
 
@@ -724,8 +725,12 @@ directamente en dólares.
 
 ## 4. Experimentos
 
-Tres experimentos, cada uno aislando **una** pieza del framework: memoria (§4.1),
-gate (§4.2) y prompt (§4.3). Son **comparaciones apareadas** en el sentido de la
+Cinco experimentos, cada uno aislando **una** pieza del framework: resumen de
+estado (§4.1), gate (§4.2), prompt (§4.3), corte de loop (§4.4) y ventana de
+memoria (§4.5). Los dos últimos son **resultados negativos** —el mecanismo hace
+lo que promete y la accuracy no se mueve— y están acá justamente por eso:
+descartan dos de las tres explicaciones candidatas para la brecha de
+consistencia del §3.1. Son **comparaciones apareadas** en el sentido de la
 clase —*mismos escenarios, misma N (3 repeats), mismo entorno y modelo*—; solo
 cambia el eje bajo estudio, los demás quedan fijos. Eso es lo que permite atribuir
 una diferencia a la pieza y no al ruido.
@@ -898,6 +903,74 @@ esconde la forma: el gate no mejora parejo, **rescata un escenario puntual**
   los tres donde el efecto apunta claro en una dirección y solo falta potencia
   estadística para confirmarlo.
 
+### 4.4 Experimento 4 — Corte de loop en runtime (Clase 7)
+
+- **Qué cambiamos.** `react` vs. `loop_breaker`. La señal de loop de la Clase 7
+  es la **repetición de la firma tool + argumentos**; el harness ya la medía *a
+  posteriori* (`repeticiones_consecutivas`) pero el agente no hacía nada con
+  ella. Ahora, a la 3.ª llamada idéntica consecutiva, en vez de re-ejecutar la
+  herramienta se devuelve una **observación** al modelo (*"ya la llamaste N veces
+  con estos argumentos y el resultado no cambió; probá otra cosa"*). Es un
+  empujón, no un corte duro: el loop sigue vivo.
+- **Hipótesis.** `loop_detected` es el modo de fallo **más caro** (§3.3: 125 s de
+  media, 1.499 s totales, más que todos los éxitos juntos). Cortar el ciclo
+  debería convertir parte de esos casos en éxitos, o al menos liberar
+  iteraciones.
+- **Resultado.**
+
+  | | `react` | `loop_breaker` |
+  |---|---:|---:|
+  | Accuracy | 0.792 | 0.708 |
+  | **Racha máx. de tool-calls repetidas** | **15** | **3** |
+  | `pass@k` / `pass^k` | 1.0 / 0.625 | 0.875 / 0.625 |
+  | Intervenciones del corte | — | **1 en 24 casos** |
+
+  **El mecanismo funciona y el efecto esperado no aparece.** La racha máxima cae
+  de 15 a 3 —el corte hace exactamente lo que promete— pero la accuracy no
+  mejora (los IC se solapan; la baja tampoco es significativa).
+
+  El dato revelador es que el corte **intervino una sola vez en 24 casos**. Al
+  cortar temprano, el modelo cambia de estrategia y ya no llega a rachas largas:
+  el mecanismo **se auto-previene**. Por eso la racha baja tanto habiendo actuado
+  tan poco.
+
+- **Conclusión.** Los loops largos eran un **síntoma**, no la causa. Eliminarlos
+  no libera éxitos, lo que significa que en esos casos el agente no estaba
+  "atascado y a punto de resolver": estaba perdido, y repetir era una forma de
+  estarlo entre otras. Un resultado negativo, pero acota el problema: la brecha
+  de consistencia (§3.1) **no se cierra por el lado de la redundancia**.
+
+### 4.5 Experimento 5 — Ventana de memoria (50 vs. 120 mensajes)
+
+- **Qué cambiamos.** El mismo brazo `react` con `--max-history-messages 120` en
+  vez del default de 50. Es el hiperparámetro de memoria expuesto por el harness
+  (§2.3).
+- **Hipótesis.** Si la ventana deslizante está descartando turnos que el agente
+  necesita, ampliarla debería mejorar los escenarios de horizonte largo.
+- **Resultado.** No mejora:
+
+  | | ventana 50 | ventana 120 |
+  |---|---:|---:|
+  | Accuracy | 0.792 | 0.708 |
+  | `pass^k` | 0.625 | 0.500 |
+  | Tool-calls de media | 21.4 | 21.4 |
+  | Tokens de input | 2.693.635 | 2.744.204 (**+2 %**) |
+
+  p = 0.505 agrupado, **p = 0.683 estratificado**. Seis de los ocho escenarios
+  dan **exactamente el mismo resultado**; dos empeoran en un caso cada uno.
+
+- **Conclusión — y una hipótesis nuestra que los datos desmintieron.** Habíamos
+  estimado, contando ~2 mensajes por tool-call, que el **48 %** de los casos
+  desbordaba la ventana de 50. Si eso fuera cierto, pasar a 120 habría aumentado
+  el input mucho más que **+2 %**. No lo hizo, y las tool-calls quedaron
+  idénticas: **la ventana casi no estaba recortando nada**. La estimación era
+  mala; la medición directa la corrigió.
+
+  Con eso, **la memoria de trabajo queda descartada como cuello de botella** en
+  este dataset. Junto con el Experimento 4, dos de las tres explicaciones
+  candidatas para la brecha de consistencia —redundancia y pérdida de contexto—
+  quedan afuera.
+
 ---
 
 ## 5. Limitaciones y próximos pasos
@@ -991,6 +1064,13 @@ esconde la forma: el gate no mejora parejo, **rescata un escenario puntual**
 > agente ya resuelve los 8 escenarios en algún intento (`pass@k` = 1.0) pero solo
 > 5 de 8 en los tres (`pass^k` = 0.625), y subir de modelo ya no mueve la aguja
 > (§3.5). Todo lo que sigue apunta a cerrar esa brecha.
+>
+> **Y ya sabemos por dónde NO va.** Probamos las dos explicaciones más obvias y
+> las dos fallaron: cortar los loops en runtime (§4.4) reduce la racha máxima de
+> 15 a 3 y **no mueve la accuracy**; ampliar la ventana de memoria de 50 a 120
+> (§4.5) deja seis de ocho escenarios **idénticos**. Ni la redundancia ni la
+> pérdida de contexto explican la inconsistencia. Lo que queda es la **calidad de
+> la decisión** en cada paso, que es donde apuntan los puntos 1, 3 y 4.
 
 1. **Rediseñar el summarizer, no desactivarlo selectivamente.** El §4.1 identificó
    el mecanismo del daño: **el resumen induce loops** (9 de 24 casos, rachas de

@@ -1,0 +1,121 @@
+{
+  "meta": {
+    "timestamp": "20260827-004743",
+    "module": "student_framework",
+    "max_iterations": 30,
+    "max_history_messages": null,
+    "repeats": 3,
+    "provider": "bedrock",
+    "model": "amazon.nova-lite-v1:0",
+    "bedrock_model_id": "amazon.nova-lite-v1:0",
+    "aws_profile": "948169713308_udesasbx_IsbUsersPS",
+    "aws_region": "us-east-1",
+    "prompt_version": "escape-v1",
+    "git_commit": "4bf6a61"
+  },
+  "summary": {
+    "n_cases": 24,
+    "by_config": {
+      "loop_breaker": {
+        "n": 24,
+        "solved": 17,
+        "accuracy": 0.708,
+        "accuracy_ci95": [
+          0.508,
+          0.851
+        ],
+        "pass_hat_k": 0.625,
+        "pass_at_k": 0.875,
+        "k": 3,
+        "pass_k_scenarios": "5/8",
+        "pass_at_k_scenarios": "7/8",
+        "avg_calls_overhead_vs_optimal": 2.47,
+        "avg_tool_calls": 21.71,
+        "latency_p50_s": 24.286,
+        "latency_p95_s": 29.91,
+        "latency_agente_p50_s": 24.286,
+        "latency_summarizer_p50_s": 0.0,
+        "tokens_per_solved": 158460,
+        "avg_agent_tokens": 112242.75,
+        "avg_memory_tokens": 0.0,
+        "cost_usd_total": 0.167017,
+        "cost_usd_per_case": 0.006959,
+        "cost_usd_per_solved": 0.009825,
+        "solve_rate_by_scenario": {
+          "study-with-key": 1.0,
+          "color-locks": 1.0,
+          "library-search": 0.333,
+          "extreme-archive": 1.0,
+          "apartment-keys": 1.0,
+          "office-sequence": 1.0,
+          "vault-combination": 0.333,
+          "backtracking-vault": 0.0
+        },
+        "solve_rate_std": 0.389,
+        "redundancy_distribution": {
+          "1": 21,
+          "2": 2,
+          "3": 1
+        },
+        "tool_usage": {
+          "look": 75,
+          "examine": 172,
+          "take": 57,
+          "use": 87,
+          "go": 130
+        },
+        "invalid_action_rate": 0.0,
+        "avg_progress": {
+          "items_taken": 2.25,
+          "rooms_visited": 2.46,
+          "items_opened": 1.71
+        },
+        "failure_breakdown": {
+          "success": 17,
+          "exhausted_iterations": 6,
+          "loop_detected": 1
+        },
+        "prosa_variant_breakdown": {},
+        "by_difficulty": {
+          "easy": {
+            "n": 3,
+            "solved": 3,
+            "accuracy": 1.0
+          },
+          "extreme": {
+            "n": 9,
+            "solved": 4,
+            "accuracy": 0.444
+          },
+          "hard": {
+            "n": 6,
+            "solved": 4,
+            "accuracy": 0.667
+          },
+          "medium": {
+            "n": 6,
+            "solved": 6,
+            "accuracy": 1.0
+          }
+        }
+      }
+    },
+    "failure_priority": {
+      "success": {
+        "freq": 17,
+        "total_latency_s": 280.5,
+        "avg_latency_s": 16.5
+      },
+      "exhausted_iterations": {
+        "freq": 6,
+        "total_latency_s": 166.5,
+        "avg_latency_s": 27.7
+      },
+      "loop_detected": {
+        "freq": 1,
+        "total_latency_s": 25.3,
+        "avg_latency_s": 25.3
+      }
+    }
+  }
+}

@@ -80,6 +80,10 @@ CONFIGS: dict[str, dict[str, Any]] = {
     # usa tools). Comparar aísla cuánto aporta el prompt de sala de escape.
     # `prompt_generico` lo consume run_one (no build_agent).
     "react_generico": {"use_summarizer": False, "prompt_generico": True},
+    # Experimento #4 (corte de loop): "react" es el OFF. `loop_breaker` aplica la
+    # señal de loop de la Clase 7 EN RUNTIME —a la 3ra llamada idéntica devuelve
+    # una observación en vez de re-ejecutar— en vez de solo medirla a posteriori.
+    "loop_breaker": {"use_summarizer": False, "loop_breaker": True},
 }
 
 # Tope de iteraciones para el eval. El default del agente (20) no alcanza para
@@ -113,10 +117,27 @@ def _seed_de_caso(scenario_id: str, repeat: int) -> int | None:
 
 
 def _cliente_ollama_con_semilla(seed: int) -> Any:
-    """`LLMClient` de Ollama con la semilla fijada, respetando el entorno."""
+    """`LLMClient` de Ollama con la semilla de muestreo fijada.
+
+    `mia_agents/` es **FIJO (no editar)** (README), así que no agregamos el
+    parámetro al provider de la cátedra: envolvemos el cliente Ollama que ese
+    provider ya construye e inyectamos `seed` en las `options` de cada llamada.
+    El provider queda intacto y el bloqueo funciona igual.
+    """
     from mia_agents.llm_client import LLMClient, OllamaProvider
 
-    return LLMClient(OllamaProvider(seed=seed))
+    provider = OllamaProvider()
+    cliente = provider._client
+    chat_original = cliente.chat
+
+    def chat_con_semilla(**kwargs: Any) -> Any:
+        opciones = dict(kwargs.get("options") or {})
+        opciones["seed"] = seed
+        kwargs["options"] = opciones
+        return chat_original(**kwargs)
+
+    cliente.chat = chat_con_semilla  # type: ignore[method-assign]
+    return LLMClient(provider)
 
 
 def costo_usd(input_tokens: int, output_tokens: int, model: str | None) -> float:
@@ -696,6 +717,7 @@ def run_one(
         # anterior. > 0 significa que el resumen quedó congelado en algún
         # tramo: la corrida es válida, pero el brazo `summarizer` no operó al
         # 100 % ahí. Sin esto, la degradación sería invisible.
+        "loops_cortados": getattr(agent, "loops_cortados", 0),
         "memory_failures": getattr(agent, "memory_failures", 0),
         "last_memory_error": getattr(agent, "last_memory_error", None),
         "latency_s": latency,
@@ -714,6 +736,36 @@ def _git_commit() -> str | None:
         return out.stdout.strip() or None
     except Exception:  # noqa: BLE001
         return None
+
+
+def cargar_dotenv() -> list[str]:
+    """Exporta el `.env` del repo al entorno del proceso. Devuelve qué cargó.
+
+    El enunciado pide que la infraestructura sea **reproducible sin pasos
+    manuales**: `python eval/run.py` y listo. Sin esto no lo era. `_env_value`
+    (abajo) lee el `.env` para poblar el meta de la corrida, pero **boto3 lee
+    del entorno del proceso**, no del archivo — así que el provider se
+    registraba como `bedrock` en el meta y la llamada moría por credenciales, a
+    menos que el usuario exportara el `.env` a mano antes de invocar.
+
+    Lo que ya está en el entorno **gana**: permite `BEDROCK_MODEL_ID=x python
+    eval/run.py` para pisar un valor puntual sin editar el archivo.
+    """
+    env_file = _REPO_ROOT / ".env"
+    if not env_file.exists():
+        return []
+    cargadas = []
+    for line in env_file.read_text(encoding="utf-8").splitlines():
+        line = line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        clave, valor = line.split("=", 1)
+        clave = clave.strip()
+        valor = valor.strip().strip('"').strip("'")
+        if clave and valor and not os.environ.get(clave):
+            os.environ[clave] = valor
+            cargadas.append(clave)
+    return cargadas
 
 
 def _env_value(key: str) -> str | None:
@@ -745,6 +797,12 @@ def _iter_scenario_paths(scenarios_dir: Path, only: set[str] | None) -> list[Pat
 
 
 def main(argv: list[str] | None = None) -> int:
+    # Antes de cualquier otra cosa: el `.env` al entorno, para que
+    # `python eval/run.py` funcione sin pasos previos (ver `cargar_dotenv`).
+    cargadas = cargar_dotenv()
+    if cargadas:
+        print(f"[.env] cargadas: {', '.join(cargadas)}", flush=True)
+
     parser = argparse.ArgumentParser(prog="eval/run.py")
     parser.add_argument(
         "--scenarios-dir", default=str(DEFAULT_SCENARIOS_DIR),

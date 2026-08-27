@@ -379,6 +379,10 @@ def judge_cases(
 
 
 def main(argv: list[str] | None = None) -> int:
+    #  al entorno: el enunciado pide reproducibilidad sin pasos
+    # manuales, y boto3 lee del entorno, no del archivo.
+    from eval.run import cargar_dotenv
+    cargar_dotenv()
     import importlib
 
     parser = argparse.ArgumentParser(prog="eval/judge.py")

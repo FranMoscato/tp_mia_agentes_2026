@@ -901,9 +901,14 @@ esconde la forma: el gate no mejora parejo, **rescata un escenario puntual**
   —"la accuracy está acotada por el modelo"— y la escalera de capacidad la
   **cerró**: de `qwen2.5:3b` a `nova-lite` la accuracy salta +0.792, y de `lite` a
   `pro` **no mejora** (§3.5). Lo que queda entre 0.792 y 1.0 es del diseño del
-  agente. Lo que **no** podemos afirmar es que el techo sea del *tamaño* del
-  modelo: entre los locales y Nova cambian tamaño, cuantización (`Q4_K_M`),
-  familia y API a la vez. Separarlo requiere las corridas de §5.1.
+  agente.
+
+  El **confound de cuantización quedó acotado** por la Escalera B (§5.1): con
+  familia `llama` y `Q4_K_M` fijos, pasar de 3.2B a 8.0B rompe el cero
+  (`gate` 0/24 → 4/24, p=0.037). O sea que el 0/24 de los modelos chicos **no
+  era solo degradación por correrlos a 4 bits**: el tamaño contribuye. Lo que
+  sigue sin poder atribuirse es la brecha entre el 8B local (0.125) y `nova-lite`
+  (0.792), donde cambian familia, entrenamiento y API a la vez.
 - **Óptimo como referencia de eficiencia.** El overhead es relativo al óptimo
   **derivado por búsqueda**; es una medida de eficiencia, no una afirmación de
   minimalidad absoluta (aunque coincide con el enunciado en los 8/8).
@@ -1017,13 +1022,37 @@ el modelo. `nova-pro` se corrió solo sobre `react` porque los otros tres brazos
 ya están medidos con `nova-lite`, que es donde se compara la **arquitectura**
 (corrida completa con `pro` habría costado $10).
 
-**Escalera B — tamaño** (Ollama; cuantización Q4_K_M constante). **Pendiente:**
+**Escalera B — tamaño** (Ollama; **familia `llama` y cuantización `Q4_K_M`
+constantes**, solo cambia el tamaño). Los dos primeros peldaños **ya están
+corridos** y aíslan el eje que la Escalera A no puede:
+
+| Modelo | Parámetros | Cuantización | `react` | `gate` |
+|---|---:|---|---:|---:|
+| `llama3.2` | 3.2B | Q4_K_M | 0/24 [0.00, 0.14] | 0/24 [0.00, 0.14] |
+| `llama3.1` | **8.0B** | Q4_K_M | 3/24 [0.04, 0.31] | **4/24** [0.07, 0.36] |
+
+Pasar de 3.2B a 8.0B **rompe el cero**: `gate` va de 0/24 a 4/24, **p = 0.037**
+(significativo); `react` de 0/24 a 3/24, p = 0.074 (no alcanza). Como la familia
+y la cuantización quedan fijas, **el efecto es atribuible al tamaño**.
+
+Qué autoriza a decir y qué no. Autoriza: *el tamaño del modelo contribuye al
+techo*, y por lo tanto el 0/24 de los modelos chicos **no era solo degradación
+por cuantizar a 4 bits**. No autoriza: atribuir al tamaño toda la brecha hasta
+`nova-lite` (0.792) — entre el 8B local y Nova siguen cambiando familia,
+entrenamiento y API a la vez. Lo que queda del confound es más chico y está
+acotado.
+
+Falta el peldaño de arriba para cerrar la curva local:
 
 | Modelo | Parámetros | Estado |
 |---|---:|---|
-| `qwen2.5:3b` | 3.1B | **ya corrida (0/24)** |
+| `qwen2.5:3b` | 3.1B | ya corrida (0/24) |
 | `qwen2.5:7b` | 7B | pendiente |
 | `qwen2.5:14b` | 14B | pendiente (según RAM disponible) |
+
+La familia `qwen` replicaría el peldaño en un entrenamiento distinto: si 3B→7B
+mueve la aguja como 3.2B→8.0B lo hizo en `llama`, el efecto del tamaño deja de
+depender de una sola familia.
 
 ```bash
 ollama pull qwen2.5:7b

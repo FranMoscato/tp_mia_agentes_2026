@@ -468,10 +468,17 @@ def summarize(
     prio: dict[str, dict[str, Any]] = {}
     for c in cases:
         cat = categorize(c, max_iterations)
-        p = prio.setdefault(cat, {"freq": 0, "total_latency_s": 0.0})
+        p = prio.setdefault(cat, {"freq": 0, "total_latency_s": 0.0, "_lats": []})
         p["freq"] += 1
         p["total_latency_s"] += c["latency_s"]
+        p["_lats"].append(c["latency_s"])
     for p in prio.values():
+        lats = p.pop("_lats")
+        # La MEDIANA es la que describe el caso típico; el principio de la clase
+        # ("nunca promedio") aplica a eso. El promedio queda solo porque
+        # freq × avg = total, que es el costo agregado por el que priorizamos —
+        # ahí es una suma, no una afirmación sobre la experiencia típica.
+        p["median_latency_s"] = round(statistics.median(lats), 1)
         p["avg_latency_s"] = round(p["total_latency_s"] / p["freq"], 1)
         p["total_latency_s"] = round(p["total_latency_s"], 1)
     summary["failure_priority"] = dict(

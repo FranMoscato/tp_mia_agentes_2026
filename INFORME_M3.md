@@ -7,11 +7,17 @@
 > [INFORMES.md](INFORMES.md).
 
 > **Estado del documento.** Las 5 secciones están completas con datos reales de
-> una corrida local (`ollama` / `qwen2.5:3b`, 8 escenarios × 3 configs × **3
-> repeats** = 72 casos). Marcamos con `†` los números que se refrescan con la
-> corrida en Bedrock (modelo fuerte), pendiente del lease de AWS. Las
-> conclusiones ya son estables. **El próximo paso del trabajo es esa corrida en
-> Bedrock** (§5): desbloquea las métricas hoy degeneradas y la kappa del judge.
+> **Bedrock**: la corrida canónica es `amazon.nova-lite-v1:0`, 8 escenarios × 4
+> configs × **3 repeats** = 96 casos, más una **escalera de capacidad**
+> (`nova-micro` → `nova-lite` → `nova-pro`) y el judge fuerte
+> (`nova-pro` juzgando a `nova-lite`, cobertura 96/96). Las corridas locales
+> (`qwen2.5:3b`, `llama3.2`) se conservan como comparación cross-modelo (§3.5).
+>
+> **El hallazgo que ordena el informe:** el techo dejó de ser el modelo. La
+> accuracy sube de 0/24 a 0.792 entre el modelo local y `nova-lite`, y **deja de
+> subir** en `nova-pro` (0.625, sin diferencia significativa). Lo que falta para
+> cerrar la brecha hay que buscarlo en el diseño del agente, no en pagar por un
+> modelo más grande (§3.5, §5).
 
 ---
 
@@ -219,41 +225,57 @@ indistinguibles. El núcleo de métricas, la búsqueda del óptimo y el judge es
 
 ## 3. Resultados
 
-> Corrida: `python eval/run.py --repeats 3` con `ollama` / `qwen2.5:3b`, prompt
-> `escape-v1`, `max_iterations=30`, 8 escenarios × 3 configs × 3 repeats = 72
-> casos. Un piloto previo en `nova-lite-v1:0` (Bedrock, config `react`) dio el
-> mismo cuadro (0/8, prosa dominante), lo que corrobora que el hallazgo no es
-> artefacto de un modelo.
+> Corrida canónica: `python eval/run.py --repeats 3` con `bedrock` /
+> `amazon.nova-lite-v1:0`, prompt `escape-v1`, `max_iterations=30`, 8 escenarios
+> × 4 configs × 3 repeats = **96 casos**, 2 h 03 min, **$0.75**. Resultados en
+> `eval/results/20260825-204157/`.
 
 ### 3.1 Tabla principal por configuración
 
 Cada config corre los 8 escenarios × 3 repeats = 24 casos.
 
-| Config | Accuracy (IC95%) | pass@k / pass^k | Varianza (std) | Latencia p50/p95 (s) |
-|---|---:|---:|---:|---:|
-| `react` | 0/24 [0.0, 0.14]† | 0/8 / 0/8† | 0.0 | 2.7 / 6.1 |
-| `summarizer` | 0/24 [0.0, 0.14]† | 0/8 / 0/8† | 0.0 | **25.9 / 50.1** |
-| `gate` | 0/24 [0.0, 0.14]† | 0/8 / 0/8† | 0.0 | 3.6 / 5.3 |
+| Config | Accuracy (IC95%) | pass@k / pass^k | Overhead vs óptimo | Tokens/resuelto | Latencia p50/p95 (s) |
+|---|---:|---:|---:|---:|---:|
+| `react` | **0.792** [0.595, 0.908] | **1.0** / 0.625 | 2.36x | 143.340 | 24.9 / 31.1 |
+| `gate` | 0.667 [0.467, 0.820] | 0.875 / 0.5 | 2.56x | 161.362 | 25.4 / 33.2 |
+| `react_generico` | 0.625 [0.427, 0.788] | 0.875 / 0.375 | 2.80x | 114.328 | 26.2 / 30.5 |
+| `summarizer` | 0.375 [0.212, 0.573] | 0.5 / 0.25 | 1.79x | 481.678 | **98.7 / 217.5** |
 
-Con este modelo **ninguna configuración abre una puerta**: `pass@k` (capacidad) y
-`pass^k` (confiabilidad) **coinciden en 0/8** —ni siquiera "puede" resolverlo una
-vez—. La brecha entre ambos recién aparece con un modelo que sí resuelve algo
-(`llama3.2 + summarizer`, §3.5: `pass@k` 1/8 vs. `pass^k` 0/8 — *puede* con el
-escenario fácil, pero no de forma consistente). La **varianza entre repeats es 0**:
-no es *flaky*, falla de forma **consistente**. El techo lo pone
-la disciplina de tool-calling, no el framework (§3.3). (El único éxito que vimos
-—`study-with-key` en un smoke suelto— no se repitió en 3 intentos: 0/3.)
+**El resultado más fuerte de la corrida es `pass@k` = 1.0 en `react`.** El agente
+resuelve **los 8 escenarios** en al menos uno de los 3 intentos: no hay ninguno
+que sea incapaz de resolver. Pero `pass^k` = 0.625 — solo en 5 de 8 lo logra las
+tres veces.
+
+Esa brecha entre **capacidad** (1.0) y **confiabilidad** (0.625) es exactamente
+lo que las dos métricas existen para separar, y con el modelo local no se podía
+ver porque ambas daban 0. El límite del agente **no es saber resolver: es la
+consistencia**. Eso reorienta el trabajo pendiente hacia reducir varianza de
+trayectoria, no hacia ampliar capacidades (§5).
+
+En el otro extremo, `summarizer` pierde en todos los ejes a la vez: la mitad de
+accuracy que `react`, **3,4× más tokens por resuelto** (481 k vs. 143 k) y **7×
+peor latencia p95** (217 s vs. 31 s). El §4.1 lo desarrolla.
 
 ### 3.2 Accuracy por dificultad y por escenario
 
-Todas las celdas dan 0 con `qwen2.5:3b`. La vista escenario × config lo hace
-explícito y sirve para leer *dónde* falla cada config (con Bedrock, dónde
-empieza a resolver):
+La accuracy **cae monótonamente con la dificultad** en los cuatro brazos, que es
+lo mínimo que se le pide a un dataset bien graduado:
+
+| Dificultad | `react` | `gate` | `react_generico` | `summarizer` |
+|---|---:|---:|---:|---:|
+| easy | 3/3 | 3/3 | 3/3 | 2/3 |
+| medium | 6/6 | 6/6 | 4/6 | 6/6 |
+| hard | 4/6 | 3/6 | 4/6 | 1/6 |
+| extreme | 6/9 | 4/9 | 4/9 | **0/9** |
 
 ![Tasa de éxito por escenario × config](docs/m3_heatmap.png)
 
-El interés no está en la accuracy —uniformemente 0— sino en **cómo** falla cada
-config, que es donde los experimentos separan aguas (§3.3, §4).
+Dos lecturas que la vista agregada esconde. Primero, **`summarizer` colapsa con
+la dificultad**: va parejo con el resto en `easy`/`medium` y se derrumba a 1/6 y
+**0/9** cuando el horizonte se alarga —justo donde un resumen de estado debería
+ayudar más—. Segundo, `react` y `react_generico` empatan en `hard` (4/6): la
+ventaja del prompt especializado (§4.3) no es pareja, se juega en `medium` y
+`extreme`.
 
 **Óptimo por escenario (BFS, = enunciado):** study-with-key 3 · color-locks 11 ·
 apartment-keys 7 · library-search 7 · office-sequence 13 · extreme-archive 4 ·
@@ -265,11 +287,30 @@ escenarios concretos, partimos los 8 en **dev** (`study-with-key`, `color-locks`
 (`apartment-keys`, `office-sequence`, `vault-combination`, `backtracking-vault`),
 y **iteramos solo sobre dev** (el holdout se mira al final). Nuestras decisiones
 —prompt `escape-v1`, gate, summarizer— son **genéricas** (no dependen de ningún
-escenario), así que no hay riesgo real de overfitting; el holdout lo confirma:
-con `qwen` es 0/4 en dev **y** 0/4 en holdout, y el único bolsillo de éxito de
-todo el barrido (`llama3.2 + summarizer`, §3.5) cae en **dev** (`study-with-key`,
-el más fácil), con holdout uniformemente 0/4. En otras palabras, lo poco que se
-resuelve es el escenario trivial, no un artefacto de haber ajustado a casos vistos.
+escenario), así que no hay riesgo real de overfitting.
+
+Con `nova-lite` el split da **dev 35/48 (0.729)** contra **holdout 24/48
+(0.500)**. La brecha existe, pero **desglosada por dificultad no es
+overfitting** —es lo contrario—:
+
+| Dificultad | dev | holdout |
+|---|---:|---:|
+| easy | 11/12 | — |
+| medium | 10/12 | **12/12** |
+| hard | 5/12 | **7/12** |
+| extreme | 9/12 | 5/24 |
+
+En `medium` y `hard` el **holdout rinde mejor que dev**, que es exactamente lo
+opuesto a haber ajustado a los casos vistos. **Toda la brecha viene de
+`extreme`**, y ahí el problema no es el split sino que los tres escenarios
+`extreme` no son igual de difíciles entre sí: dev aporta solo
+`extreme-archive` (9/12 = 0.75) mientras holdout aporta `vault-combination` y
+`backtracking-vault` (5/24 = 0.21), que son los dos de mayor horizonte del
+dataset (óptimos 21 y 18 contra 4).
+
+Dicho de otro modo: la etiqueta `extreme` agrupa cosas muy distintas, y con un
+solo escenario por celda en dev el split queda desbalanceado. Es una limitación
+del diseño del split, no una señal de sobreajuste.
 
 ### 3.3 Análisis de errores (sobre trazas reales)
 
@@ -287,42 +328,51 @@ priori:
 
 ![Modos de fallo por configuración](docs/m3_fallos.png)
 
-Sobre 24 casos por config (8 escenarios × 3 repeats):
+Sobre 24 casos por config (8 escenarios × 3 repeats), con `nova-lite`:
 
-| Config | prosa_en_vez_de_tool | loop_detected | tool_errors |
-|---|---:|---:|---:|
-| `react` | 24 | 0 | 0 |
-| `summarizer` | 19 | **3** | **2** |
-| `gate` | 24 | **0** | **0** |
+| Config | success | exhausted_iterations | loop_detected | prosa_en_vez_de_tool | crash |
+|---|---:|---:|---:|---:|---:|
+| `react` | 19 | 3 | 2 | 0 | 0 |
+| `gate` | 16 | 7 | 1 | 0 | 0 |
+| `react_generico` | 15 | 7 | 0 | 2 | 0 |
+| `summarizer` | 9 | 3 | **9** | 1 | **2** |
 
-**Modo dominante: `prosa_en_vez_de_tool`.** El agente **deja de llamar
-herramientas y "habla"** en lugar de actuar. Dos variantes, tomadas de las
-trazas reales:
+**El modo de fallo dominante cambió de naturaleza al cambiar el modelo.** Con
+`qwen2.5:3b` era `prosa_en_vez_de_tool` —el agente describía la acción en vez de
+emitirla, y el loop se cerraba antes de actuar—. Con `nova-lite` ese modo
+**prácticamente desaparece**: 0 casos en `react`, 2 en `react_generico`, 1 en
+`summarizer`.
 
-- **inversión de rol:** imparte instrucciones a un tercero
-  (*"Haz uso de la llave plateada en el cofre…"*).
-- **intención anunciada:** anuncia en primera persona lo que hará
-  (*"Volveré a examinar el escritorio…"*).
+Eso es un resultado, no una nota al pie. `prosa_en_vez_de_tool` es un fallo del
+**protocolo**: en términos de la Clase 3, el modelo devuelve texto
+(`stopReason = end_turn`) donde debía emitir un `toolUse`. Ese fallo **no dice
+nada sobre el diseño del agente** —el motor de tool-use de M1 está bien, el
+modelo chico no lo acciona—. Los modos que quedan sí hablan del diseño:
 
-El fallo es de **disciplina de tool-calling**, no de razonamiento espacial: el
-agente entiende qué hacer pero lo **describe** en vez de emitir el `tool_call`.
-En términos del protocolo de tool use (Clase 3), **falla el "Turn 1"**: en vez de
-emitir un `toolUse` (`stopReason = tool_use`), devuelve texto
-(`stopReason = end_turn`), lo que **cierra el loop** antes de actuar. Es,
-literalmente, una falla del **mecanismo de tool-use que construimos en M1** (ver
-[INFORME_M1](INFORME_M1.md) §1): el motor está bien; el modelo chico no lo
-acciona. Por eso el gate (§4.2) no lo elimina —el gate valida un `toolUse` que acá
-**nunca llega**; solo limpia los fallos por uso inválido cuando el modelo sí actúa.
+- **`exhausted_iterations`** (3 a 7 por brazo): el agente actúa correctamente
+  pero no le alcanzan las 30 iteraciones. Es un fallo de **eficiencia de
+  trayectoria**, coherente con el overhead de 2.4-2.8× sobre el óptimo (§3.1).
+- **`loop_detected`**: repetir la misma tool con los mismos argumentos. Acá está
+  el hallazgo fuerte de la sección.
 
-**Redundancia (señal de loop).** Medimos la racha máxima de tool-calls idénticas
-por caso:
+**El `summarizer` loopea, y ese es el mecanismo de su mal desempeño.** Nueve de
+sus 24 casos (37 %) terminan en `loop_detected`, contra 2 de `react`. La racha
+máxima de tool-calls idénticas consecutivas es la medida directa:
+
+| Config | racha máxima | casos con racha ≥ 3 |
+|---|---:|---:|
+| `react_generico` | 3 | 1 |
+| `gate` | 12 | 3 |
+| `react` | 15 | 5 |
+| `summarizer` | **23** | **9** |
+
+Veintitrés llamadas idénticas seguidas. Re-inyectar un estado resumido en cada
+turno **no ancla al agente, lo encierra**: si el resumen omite o deforma el
+efecto de la última acción, el agente vuelve a intentarla, y el resumen siguiente
+—derivado de esa misma interacción— vuelve a omitirla. El §4.1 cierra el
+argumento con el contraste estadístico.
 
 ![Redundancia: racha máxima de tool-calls repetidas](docs/m3_redundancia.png)
-
-`react` y `gate` casi no repiten (racha 1); el **`summarizer` es el que más
-loopea** (casos con rachas de 3 y hasta 5). Consistente con que re-inyectar un
-estado resumido a veces **refuerza** una acción equivocada en lugar de
-corregirla —otro costo del resumen, además de la latencia.
 
 **Prioridad = frecuencia × costo, no frecuencia sola.** La clase advierte que
 priorizar por frecuencia esconde los modos raros pero caros. Lo computamos
@@ -330,43 +380,57 @@ priorizar por frecuencia esconde los modos raros pero caros. Lo computamos
 
 | Modo de fallo | Frecuencia | Latencia media | **Costo total (freq × costo)** |
 |---|---:|---:|---:|
-| `prosa_en_vez_de_tool` | 67 | 9.4 s | 628 s |
-| `loop_detected` | **3** | **155.7 s** | **467 s** |
-| `tool_errors` | 2 | 49.5 s | 99 s |
+| `loop_detected` | 12 | **125.0 s** | **1.499,8 s** |
+| `exhausted_iterations` | **20** | 40.3 s | 805,4 s |
+| `crash` | 2 | **132.8 s** | 265,6 s |
+| `prosa_en_vez_de_tool` | 3 | 40.4 s | 121,1 s |
 
-Por **frecuencia** manda la prosa (67 vs 3). Pero los **loops**, con solo 3
-casos, cuestan casi lo mismo en total (467 s) porque cada uno es **17× más caro**
-(155 s vs 9 s). Priorizar por frecuencia sola habría descartado los loops; por
-frecuencia × costo, son un objetivo de primera —y quien los produce es el
-`summarizer`, lo que refuerza la conclusión del Experimento 1.
+*(`success` aparece en el JSON con 59 casos y 1.460,5 s: no es un fallo, pero
+sirve de referencia —los loops solos cuestan más tiempo que todos los éxitos
+juntos.)*
+
+Por **frecuencia** el modo dominante es `exhausted_iterations` (20 vs. 12). Pero
+por **costo total** manda `loop_detected`, porque cada loop es **3× más caro**
+(125 s contra 40 s). Priorizar por frecuencia sola habría puesto primero al
+techo de iteraciones; por frecuencia × costo, el objetivo número uno son los
+loops —y el §3.3 ya mostró quién los produce: el `summarizer`, con 9 de los 12.
+
+Vale notar que **esta priorización se dio vuelta respecto de la corrida local**.
+Con `qwen2.5:3b` el modo más frecuente era `prosa_en_vez_de_tool` (67 casos) y
+los loops eran raros pero caros (3 casos, 155 s cada uno). Ahora la prosa cayó a
+3 casos y los loops se cuadruplicaron. La conclusión metodológica —priorizar por
+frecuencia × costo, no por frecuencia— **sobrevivió al cambio de modelo**; la
+lista concreta de prioridades, no.
 
 ### 3.4 Resultados cualitativos (LLM-as-judge)
 
-Checklist binario de 3 criterios (§2.2), **judge = `llama3.2`, distinto del
-agente `qwen2.5:3b`**. El score es cuántos criterios se cumplen (0–3); la tasa de
-SÍ por criterio es lo diagnóstico.
+Checklist binario de 3 criterios (§2.2), **judge = `amazon.nova-pro-v1:0`,
+distinto del agente `nova-lite` y de mayor capacidad**. El score es cuántos
+criterios se cumplen (0–3); la tasa de SÍ por criterio es lo diagnóstico.
 
 | Config | Casos puntuados | Score (0–3) | ordenada | apoyadas | sin redundancia |
 |---|---:|---:|---:|---:|---:|
-| `react` | 24/24 | 0.96† | 0.00 | 0.12 | 0.83 |
-| `gate` | 24/24 | 1.00† | 0.08 | 0.12 | 0.79 |
-| `summarizer` | 23/24 | 0.96† | 0.13 | 0.22 | 0.61 |
+| `gate` | 24/24 | **2.38** | 0.88 | 0.88 | 0.62 |
+| `react` | 24/24 | 2.33 | 0.88 | 0.88 | 0.58 |
+| `react_generico` | 24/24 | 2.00 | 0.83 | 0.71 | 0.46 |
+| `summarizer` | 24/24 | **1.46** | 0.71 | 0.54 | **0.21** |
 
 ![Calidad de exploración por configuración](docs/m3_judge.png)
 
-Los scores son **bajos** (~1/3) y el desglose por criterio es coherente con el
-modo de fallo: casi nunca hay **exploración ordenada** (0.00–0.13) ni **acciones
-apoyadas** en lo observado (0.12–0.22), pero sí **poca redundancia** (0.61–0.83)
-—porque el agente **abandona temprano** (prosa), no porque explore bien—. El
-`summarizer` es el único con algo más de redundancia (0.61 vs 0.79–0.83), lo que
-concuerda con que loopea más (§3.3).
+**Cobertura 96/96 — 100 %.** Con el judge local (`llama3.2`) en modo
+per-criterio la cobertura se derrumbaba a 0/8; el judge fuerte puntúa todo. Eso
+confirma que aquella cobertura pobre era una limitación de *capacidad del judge
+para emitir el veredicto estructurado*, no del diseño de la rúbrica.
 
-**Sobre la cobertura del judge (honesto).** El `llama3.2` pudo puntuar
-**23–24/24** de las trazas; cuando el judge fue `qwen2.5:3b` (§3.5), solo pudo
-puntuar **9–12/24**. La lectura correcta **no** es "un judge distinto cura el
-self-preference" —eso es un sesgo de *puntaje*, que no medimos—, sino que
-**`llama3.2` es un judge más confiable para *emitir* el veredicto estructurado**
-(un modelo mejor en tool-calling).
+El orden del judge **coincide con la accuracy salvo en la cabeza**: pone `gate`
+(2.38) apenas por encima de `react` (2.33) aunque `react` resuelve más (0.792 vs
+0.667). No es contradicción —el judge puntúa la *calidad de la trayectoria*, no
+si abrió la puerta— y es consistente con lo que hace el gate: cortar acciones
+inválidas produce trazas más limpias aunque no resuelva más.
+
+Donde el judge es tajante es en el `summarizer`: **0.21 en "sin redundancia"**
+contra 0.58–0.62 del resto. Es la misma señal que la racha de 23 tool-calls
+repetidas del §3.3, medida por una vía independiente.
 
 **Meta-eval: ¿es confiable el judge? (kappa).** Corrimos la meta-eval del
 enunciado sobre el golden set (8 trazas reales del piloto `nova-lite`,
@@ -377,15 +441,47 @@ enunciado sobre el golden set (8 trazas reales del piloto `nova-lite`,
 Cohen** por criterio. La referencia es código (no otro juicio subjetivo ni el
 mismo LLM): evita la circularidad, y es uno de los **dos golden sets** que
 distingue la clase —el *del judge* (output + etiqueta), no el *del agente*
-(tarea + comportamiento esperado)—. Resultado: **κ orbita 0** —entre **−0.36 y
-+0.33** según el criterio y la corrida, **nunca cerca de la banda trabajable
-(0.6–0.8)**—. Es **exactamente el ejemplo canónico de la clase**: un judge que
-marca `exploracion_ordenada`=NO en casi todas las trazas parece "consistente"
-(alta exactitud aparente) pero da κ≈0 —el acuerdo por azar ya lograba eso—; y
-hasta reporta "acciones sin apoyo" en trazas con **cero tool-errors** (alucina el
-defecto que debía detectar). Evidencia **medida** del techo de capacidad: un judge
-tan débil como el agente no es confiable, así que los scores de la tabla van con
-pinzas.
+(tarea + comportamiento esperado)—.
+
+Con el judge fuerte, sobre las 96 trazas de la corrida canónica (59 éxitos y 37
+fallos, o sea **con variación real**, a diferencia de las 8 trazas fallidas del
+piloto):
+
+| Criterio | acuerdo bruto | **κ** | ref dice "sí" | judge dice "sí" |
+|---|---:|---:|---:|---:|
+| `sin_redundancia_evitable` | 0.77 | **0.55** | 0.66 | 0.47 |
+| `exploracion_ordenada` | 0.85 | 0.26 | **0.97** | 0.82 |
+| `acciones_apoyadas` | 0.73 | **0.00** | **0.96** | 0.75 |
+
+**Acá cambia la conclusión que traía este informe.** La versión anterior
+atribuía el κ≈0 a que *el judge chico no era confiable*. Con un judge fuerte,
+distinto del agente y sobre trazas con variación, **dos de los tres criterios
+siguen en κ≈0**. El cuello de botella no era (solo) el judge: **es la
+referencia**.
+
+Mirá la última columna. `acciones_apoyadas` da **κ = 0.00 con 73 % de acuerdo
+bruto**. Eso no es "el judge nunca acierta": es la paradoja de kappa. Cuando una
+de las dos partes dice "sí" el 96 % de las veces, el acuerdo esperado por azar ya
+es altísimo y κ lo descuenta hasta anularlo.
+
+La comparación decisiva es entre `exploracion_ordenada` y
+`sin_redundancia_evitable`: la primera tiene **más** acuerdo bruto (0.85 contra
+0.77) y sin embargo **la mitad de kappa** (0.26 contra 0.55). Lo único que las
+distingue es que la referencia satura en una (0.97) y no en la otra (0.66).
+
+Dicho como corresponde: **κ sube exactamente donde la referencia tiene
+varianza**. Nuestra `reference_verdict` marca "sí" en el 96–97 % de los casos en
+dos de los tres criterios, así que en esos dos **no puede discriminar**, y κ no
+mide la calidad del judge sino la degeneración de la referencia.
+
+Lo que sí queda establecido: en el único criterio donde la referencia discrimina,
+el judge fuerte alcanza **acuerdo moderado (κ = 0.55)**. Eso es un resultado
+positivo sobre el judge, y era invisible mientras la referencia saturaba en los
+tres.
+
+**Qué habría que arreglar** (§5): no un judge más capaz —ya lo tenemos— sino una
+referencia con umbrales más exigentes en `exploracion_ordenada` y
+`acciones_apoyadas`, de modo que reparta "sí" y "no" en proporciones comparables.
 
 **Aplicamos el rediseño de la clase (4.4) — y falló de una forma reveladora.** La
 clase recomienda **una llamada por criterio** + few-shot + **razonar antes de
@@ -394,11 +490,23 @@ y con el judge local (`llama3.2`) la **cobertura se derrumbó a 0/8**: pedirle
 *razonar antes* lo hace responder en **prosa** en vez de llamar la tool
 `final_result` —el mismísimo `prosa_en_vez_de_tool` que el judge existe para
 detectar (§3.3)—, y triplicar las llamadas multiplica la exposición a esa falla.
-La lección es la premisa que la clase da por sentada y nosotros no tenemos: el
-judge debe correr **offline, con un modelo capaz y prompt-caching**; con un modelo
-chico, el diseño teóricamente mejor es en la práctica **peor**. Por eso el modo por
-defecto es single-call (cobertura ~96%) y el per-criterio queda como opción para
-**reproducir el hallazgo** — otro argumento medido para el judge fuerte (`nova-pro`).
+La lección es la premisa que la clase da por sentada y nosotros no teníamos: el
+judge debe correr **con un modelo capaz**; con un modelo chico, el diseño
+teóricamente mejor es en la práctica **peor**.
+
+Con `nova-pro` esa premisa se cumple y la cobertura pasó a **96/96**, lo que
+cierra el argumento: el problema era la capacidad del judge para emitir el
+veredicto estructurado, no el diseño de la rúbrica. Mantenemos single-call como
+modo por defecto porque es más barato y ya da cobertura total.
+
+**Nota operativa (nos costó una tanda de corridas).** El model id del judge debe
+ser `amazon.nova-pro-v1:0`, **sin** el prefijo `us.`. El id con prefijo es un
+*inference profile* cross-region que puede rutear a `us-west-2`, y la SCP de la
+organización del sandbox lo bloquea con un deny explícito
+(`AccessDeniedException`). Peor: [`eval/judge.py`](eval/judge.py) captura la
+excepción por caso y devuelve `None`, así que el fallo se reporta como `n: 0` con
+exit code 0 —indistinguible de "el judge no pudo puntuar estas trazas"—. Hubo que
+reproducir la llamada a mano para verlo.
 
 *Caveats y una contaminación honesta.* (1) n=8 y todas fallidas → la referencia
 satura en algún criterio (`acciones_apoyadas` da SÍ en las 8 porque ninguna acción

@@ -67,13 +67,17 @@ def _grouped_bar(titulo: str, ylabel: str, valor_fn, archivo: str,
                  corridas: dict[str, dict], ylim=None) -> bool:
     """Barras agrupadas: x=config, un grupo de barras por modelo."""
     modelos = list(corridas)
-    series = {}  # modelo -> [valor por config]
+    series = {}  # modelo -> [valor por config]  (None = NO MEDIDO)
     hay_datos = False
     for m in modelos:
         fila = []
         for cfg in _CONFIGS:
             v = valor_fn(corridas[m], cfg)
-            fila.append(v if v is not None else 0)
+            # None se PRESERVA: un brazo que no corrimos no es lo mismo que un
+            # brazo que dio 0. Aplanarlo a 0 hacía que `nova-pro` —corrido solo
+            # sobre `react`— apareciera con barra en 0 en `summarizer` y `gate`,
+            # y se leyera como que ahí fracasa. Abajo esas barras se omiten.
+            fila.append(v)
             if v:
                 hay_datos = True
         series[m] = fila
@@ -86,7 +90,11 @@ def _grouped_bar(titulo: str, ylabel: str, valor_fn, archivo: str,
     fig, ax = plt.subplots(figsize=(7.5, 4.4))
     for i, m in enumerate(modelos):
         offs = [xi - 0.4 + w / 2 + i * w for xi in x]
-        bars = ax.bar(offs, series[m], w, label=m, color=_PALETA[i % len(_PALETA)])
+        # Dibujamos solo las posiciones CON dato. Donde no se midió no va barra
+        # ni etiqueta: el hueco dice "no medido", un 0 diría "medimos y dio 0".
+        pos = [o for o, v in zip(offs, series[m]) if v is not None]
+        val = [v for v in series[m] if v is not None]
+        bars = ax.bar(pos, val, w, label=m, color=_PALETA[i % len(_PALETA)])
         ax.bar_label(bars, fmt="%.2g", fontsize=7, padding=2)
     ax.set_xticks(list(x))
     ax.set_xticklabels(_CONFIGS)

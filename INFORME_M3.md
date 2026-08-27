@@ -932,6 +932,19 @@ esconde la forma: el gate no mejora parejo, **rescata un escenario puntual**
 
   (b) **No medimos self-preference** (requiere comparar puntajes de las mismas
   trazas bajo judge propio vs. ajeno).
+- **Sin prompt caching: el 38 % del input se gasta repitiendo el prompt.** El
+  system prompt `escape-v1` son ~1.995 tokens y viaja **en cada llamada**. En el
+  brazo `react` (24 casos, 516 llamadas al LLM) eso son **~1.029.000 de los
+  2.694.000 tokens de input**. El *prompt caching* —la práctica que la clase
+  señala para exactamente este caso— lo eliminaría casi por completo, porque el
+  bloque es idéntico entre llamadas.
+
+  No lo implementamos porque el `BedrockProvider` vive en `mia_agents/`, que es
+  **FIJO (no editar)** por el README, y no expone `cachePoint`. Es una limitación
+  del andamiaje, no una decisión de diseño: todas nuestras cifras de costo
+  (§3.6) están infladas por este factor, y la comparación **entre brazos** sigue
+  siendo válida porque los afecta a todos por igual.
+
 - **Escala del dataset.** 8 escenarios: los intervalos de confianza son anchos.
   pass^k y Wilson lo hacen explícito, pero no lo eliminan. Agrava el problema que
   varios estratos **se saturan** —mismo resultado en ambos brazos— y por lo tanto

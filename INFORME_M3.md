@@ -484,32 +484,53 @@ piloto):
 **Acá cambia la conclusión que traía este informe.** La versión anterior
 atribuía el κ≈0 a que *el judge chico no era confiable*. Con un judge fuerte,
 distinto del agente y sobre trazas con variación, **dos de los tres criterios
-siguen en κ≈0**. El cuello de botella no era (solo) el judge: **es la
-referencia**.
+siguen en κ≈0**. Así que el judge no era (solo) el problema.
 
-Mirá la última columna. `acciones_apoyadas` da **κ = 0.00 con 73 % de acuerdo
-bruto**. Eso no es "el judge nunca acierta": es la paradoja de kappa. Cuando una
-de las dos partes dice "sí" el 96 % de las veces, el acuerdo esperado por azar ya
-es altísimo y κ lo descuenta hasta anularlo.
+**Y lo pusimos a prueba.** La hipótesis inmediata fue que el culpable era la
+**referencia saturada**, así que endurecimos `acciones_apoyadas`: además de
+exigir cero tool-errors, ahora exige que todo `use(item=X)` venga después de un
+`take(item=X)` exitoso —la misma garantía que el gate impone por código (§4.2),
+o sea una propiedad del dominio y no un umbral elegido para mover el número—. Su
+tasa de "sí" bajó de **0.96 a 0.75**: la referencia pasó a discriminar.
 
-La comparación decisiva es entre `exploracion_ordenada` y
-`sin_redundancia_evitable`: la primera tiene **más** acuerdo bruto (0.85 contra
-0.77) y sin embargo **la mitad de kappa** (0.26 contra 0.55). Lo único que las
-distingue es que la referencia satura en una (0.97) y no en la otra (0.66).
+| Criterio | ref dice "sí" | judge dice "sí" | κ |
+|---|---:|---:|---:|
+| `sin_redundancia_evitable` | 0.66 | 0.47 | **0.55** |
+| `acciones_apoyadas` (endurecida) | **0.75** | 0.75 | **−0.056** |
+| `exploracion_ordenada` | 0.97 | 0.82 | 0.26 |
 
-Dicho como corresponde: **κ sube exactamente donde la referencia tiene
-varianza**. Nuestra `reference_verdict` marca "sí" en el 96–97 % de los casos en
-dos de los tres criterios, así que en esos dos **no puede discriminar**, y κ no
-mide la calidad del judge sino la degeneración de la referencia.
+**La hipótesis se refutó a medias, y eso es más informativo que si hubiera
+funcionado.** Con la referencia ya discriminando, la kappa de `acciones_apoyadas`
+**siguió en cero**. Fijate que ambas partes reparten en la misma proporción
+(0.75 y 0.75) pero κ = −0.056: coinciden en *cuántos* casos marcan, y no en
+*cuáles*. Es acuerdo al nivel del azar.
 
-Lo que sí queda establecido: en el único criterio donde la referencia discrimina,
-el judge fuerte alcanza **acuerdo moderado (κ = 0.55)**. Eso es un resultado
-positivo sobre el judge, y era invisible mientras la referencia saturaba en los
-tres.
+Así que el diagnóstico correcto es **por criterio, no global**:
 
-**Qué habría que arreglar** (§5): no un judge más capaz —ya lo tenemos— sino una
-referencia con umbrales más exigentes en `exploracion_ordenada` y
-`acciones_apoyadas`, de modo que reparta "sí" y "no" en proporciones comparables.
+- `sin_redundancia_evitable` — referencia discrimina, **κ = 0.55**: acuerdo
+  moderado, el judge es utilizable acá.
+- `acciones_apoyadas` — referencia discrimina y **κ ≈ 0**: el judge fuerte
+  genuinamente **no coincide**. Sin la excusa de la saturación, este es un fallo
+  real del judge sobre este criterio.
+- `exploracion_ordenada` — referencia **satura en 0.97** y κ = 0.26: acá sigue
+  sin poder distinguirse una cosa de la otra.
+
+Un punto de lectura que vale para los tres: un κ bajo **no** equivale a "el judge
+nunca acierta". `acciones_apoyadas` daba κ = 0.00 con **73 % de acuerdo bruto**
+antes de endurecer la referencia. Cuando una de las dos partes dice "sí" el 96 %
+de las veces, el acuerdo esperado por azar ya es altísimo y κ lo descuenta hasta
+anularlo. Por eso reportamos acuerdo bruto **y** κ: uno solo de los dos engaña.
+
+`exploracion_ordenada` lo ilustra al revés: tiene **más** acuerdo bruto que
+`sin_redundancia` (0.85 contra 0.77) y sin embargo **la mitad de kappa** (0.26
+contra 0.55), solo porque su referencia satura.
+
+**Qué habría que arreglar, ahora que sabemos separarlo** (§5): son dos problemas
+distintos y necesitan arreglos distintos. En `exploracion_ordenada`, endurecer la
+referencia como hicimos con `acciones_apoyadas`. En `acciones_apoyadas`, el
+problema **no es la referencia** —ya discrimina— sino que el judge no acuerda:
+ahí hace falta revisar la rúbrica que se le pasa, o aceptar que ese criterio no
+es evaluable de forma confiable por LLM y dejarlo enteramente en código.
 
 **Aplicamos el rediseño de la clase (4.4) — y falló de una forma reveladora.** La
 clase recomienda **una llamada por criterio** + few-shot + **razonar antes de
@@ -981,12 +1002,14 @@ esconde la forma: el gate no mejora parejo, **rescata un escenario puntual**
    resumen. El "summarizer selectivo" que proponíamos antes atacaba el síntoma
    (costo) y no la causa.
 
-2. **Endurecer la referencia del judge.** El §3.4 mostró que la κ≈0 viene de que
-   `reference_verdict` marca "sí" en el 96–97 % de los casos en dos criterios. Con
-   umbrales que repartan (p. ej. exigir que `look` preceda a *toda* acción sobre
-   un objeto no observado, en vez de solo a la primera), la meta-eval vuelve a ser
-   informativa. **No hace falta un judge mejor** —ya lo tenemos—, hace falta una
-   referencia que discrimine.
+2. **Separar los dos problemas del judge, que ya sabemos que son distintos.**
+   Endurecimos `acciones_apoyadas` (de 0.96 a 0.75 de tasa de "sí") y su κ
+   **siguió en cero** (§3.4): ahí el problema no es la referencia sino que el
+   judge no acuerda. Queda por decidir si se rediseña la rúbrica de ese criterio
+   o se lo saca del judge y se lo deja enteramente en código —que es lo que la
+   clase recomienda cuando hay verificación programática disponible—. En
+   `exploracion_ordenada`, en cambio, la referencia **sí** satura (0.97) y el
+   arreglo es el mismo endurecimiento que ya aplicamos al otro criterio.
 
 3. **Gate adaptativo.** El §4.2 mostró que el gate ayuda al modelo débil
    (+0.141, p=0.0338) y no al fuerte. En vez de activarlo o no, medir su valor por

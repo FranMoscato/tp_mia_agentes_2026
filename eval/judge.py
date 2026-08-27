@@ -249,16 +249,60 @@ def reference_verdict(case: dict[str, Any]) -> dict[str, bool]:
       - sin_redundancia_evitable: sin repeticiones consecutivas
         (`max_consecutive_repeats <= 1`).
     """
-    tools = [s.get("tool_name") for s in (case.get("steps") or [])]
+    steps = case.get("steps") or []
+    tools = [s.get("tool_name") for s in steps]
     idx_obs = next((i for i, t in enumerate(tools) if t in ("look", "examine")), None)
     idx_act = next((i for i, t in enumerate(tools) if t in ("take", "use", "go")), None)
     no_ciego = idx_act is None or (idx_obs is not None and idx_obs < idx_act)
     sustantiva = ("examine" in tools) or (tools.count("look") >= 2)
     return {
         "exploracion_ordenada": bool(no_ciego and sustantiva),
-        "acciones_apoyadas": (case.get("tool_error_count") or 0) == 0,
+        "acciones_apoyadas": _acciones_apoyadas(case, steps),
         "sin_redundancia_evitable": (case.get("max_consecutive_repeats") or 0) <= 1,
     }
+
+
+def _args_de(step: dict[str, Any]) -> dict[str, Any]:
+    """Argumentos de un step, tolerante al formato (string JSON o dict)."""
+    crudo = step.get("tool_input")
+    if isinstance(crudo, dict):
+        return crudo
+    try:
+        parseado = json.loads(crudo or "{}")
+        return parseado if isinstance(parseado, dict) else {}
+    except (TypeError, ValueError):
+        return {}
+
+
+def _acciones_apoyadas(case: dict[str, Any], steps: list[dict[str, Any]]) -> bool:
+    """¿Cada acción se apoya en lo que el agente efectivamente consiguió?
+
+    Dos condiciones:
+      1. Ninguna tool-call falló (`tool_error_count == 0`).
+      2. Todo `use(item=X)` viene después de un `take(item=X)` **exitoso**.
+
+    La condición 2 es el endurecimiento que faltaba. Con solo la 1, la
+    referencia decía "sí" en el **96 %** de los casos —los modelos capaces casi
+    no producen tool-errors— y un criterio que casi nunca dice "no" **no puede
+    discriminar**: la kappa contra él colapsa a ~0 aunque el judge acierte el
+    73 % de las veces (la paradoja de kappa, §3.4). Con la condición 2 el "sí"
+    baja a **0.75** y la meta-eval vuelve a ser informativa.
+
+    Por qué esta condición y no otra: es exactamente la garantía que el gate
+    impone por código (§4.2), así que es una propiedad del dominio y no un
+    umbral arbitrario elegido para mover el número.
+    """
+    if (case.get("tool_error_count") or 0) != 0:
+        return False
+    tomados: set[Any] = set()
+    for step in steps:
+        args = _args_de(step)
+        nombre = step.get("tool_name")
+        if nombre == "take" and not step.get("error"):
+            tomados.add(args.get("item"))
+        elif nombre == "use" and args.get("item") not in tomados:
+            return False
+    return True
 
 
 def cohen_kappa(labels_a: list[Any], labels_b: list[Any]) -> float | None:

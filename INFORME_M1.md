@@ -64,7 +64,7 @@ rompe.
 | `tests/conformance/test_m1.py` | Tests de conformidad | FIJO |
 
 **Estado:** los 5 tests de conformidad de M1, los 5 escenarios propios y los 23
-tests unitarios de las herramientas pasan (**33/33 en verde**).
+tests unitarios de las herramientas pasan (**26/26 en verde**).
 
 > **Nota (conteo de tests).** Los números de este informe son los de la **entrega
 > de M1**. La suite creció después: en M2 las herramientas sumaron casos borde
@@ -417,7 +417,7 @@ borde y ramas de error que los escenarios no cubren:
 - **Contador de palabras:** texto normal, vacío, solo espacios, espacios
   múltiples, saltos de línea y tabs.
 
-Resultado: **33/33 tests en verde**.
+Resultado: **26/26 tests en verde**.
 
 ---
 

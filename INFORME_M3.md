@@ -7,11 +7,17 @@
 > [INFORMES.md](INFORMES.md).
 
 > **Estado del documento.** Las 5 secciones están completas con datos reales de
-> una corrida local (`ollama` / `qwen2.5:3b`, 8 escenarios × 3 configs × **3
-> repeats** = 72 casos). Marcamos con `†` los números que se refrescan con la
-> corrida en Bedrock (modelo fuerte), pendiente del lease de AWS. Las
-> conclusiones ya son estables. **El próximo paso del trabajo es esa corrida en
-> Bedrock** (§5): desbloquea las métricas hoy degeneradas y la kappa del judge.
+> **Bedrock**: la corrida canónica es `amazon.nova-lite-v1:0`, 8 escenarios × 4
+> configs × **3 repeats** = 96 casos, más una **escalera de capacidad**
+> (`nova-micro` → `nova-lite` → `nova-pro`) y el judge fuerte
+> (`nova-pro` juzgando a `nova-lite`, cobertura 96/96). Las corridas locales
+> (`qwen2.5:3b`, `llama3.2`) se conservan como comparación cross-modelo (§3.5).
+>
+> **El hallazgo que ordena el informe:** el techo dejó de ser el modelo. La
+> accuracy sube de 0/24 a 0.792 entre el modelo local y `nova-lite`, y **deja de
+> subir** en `nova-pro` (0.625, sin diferencia significativa). Lo que falta para
+> cerrar la brecha hay que buscarlo en el diseño del agente, no en pagar por un
+> modelo más grande (§3.5, §5).
 
 ---
 
@@ -219,41 +225,57 @@ indistinguibles. El núcleo de métricas, la búsqueda del óptimo y el judge es
 
 ## 3. Resultados
 
-> Corrida: `python eval/run.py --repeats 3` con `ollama` / `qwen2.5:3b`, prompt
-> `escape-v1`, `max_iterations=30`, 8 escenarios × 3 configs × 3 repeats = 72
-> casos. Un piloto previo en `nova-lite-v1:0` (Bedrock, config `react`) dio el
-> mismo cuadro (0/8, prosa dominante), lo que corrobora que el hallazgo no es
-> artefacto de un modelo.
+> Corrida canónica: `python eval/run.py --repeats 3` con `bedrock` /
+> `amazon.nova-lite-v1:0`, prompt `escape-v1`, `max_iterations=30`, 8 escenarios
+> × 4 configs × 3 repeats = **96 casos**, 2 h 03 min, **$0.75**. Resultados en
+> `eval/results/20260825-204157/`.
 
 ### 3.1 Tabla principal por configuración
 
 Cada config corre los 8 escenarios × 3 repeats = 24 casos.
 
-| Config | Accuracy (IC95%) | pass@k / pass^k | Varianza (std) | Latencia p50/p95 (s) |
-|---|---:|---:|---:|---:|
-| `react` | 0/24 [0.0, 0.14]† | 0/8 / 0/8† | 0.0 | 2.7 / 6.1 |
-| `summarizer` | 0/24 [0.0, 0.14]† | 0/8 / 0/8† | 0.0 | **25.9 / 50.1** |
-| `gate` | 0/24 [0.0, 0.14]† | 0/8 / 0/8† | 0.0 | 3.6 / 5.3 |
+| Config | Accuracy (IC95%) | pass@k / pass^k | Overhead vs óptimo | Tokens/resuelto | Latencia p50/p95 (s) |
+|---|---:|---:|---:|---:|---:|
+| `react` | **0.792** [0.595, 0.908] | **1.0** / 0.625 | 2.36x | 143.340 | 24.9 / 31.1 |
+| `gate` | 0.667 [0.467, 0.820] | 0.875 / 0.5 | 2.56x | 161.362 | 25.4 / 33.2 |
+| `react_generico` | 0.625 [0.427, 0.788] | 0.875 / 0.375 | 2.80x | 114.328 | 26.2 / 30.5 |
+| `summarizer` | 0.375 [0.212, 0.573] | 0.5 / 0.25 | 1.79x | 481.678 | **98.7 / 217.5** |
 
-Con este modelo **ninguna configuración abre una puerta**: `pass@k` (capacidad) y
-`pass^k` (confiabilidad) **coinciden en 0/8** —ni siquiera "puede" resolverlo una
-vez—. La brecha entre ambos recién aparece con un modelo que sí resuelve algo
-(`llama3.2 + summarizer`, §3.5: `pass@k` 1/8 vs. `pass^k` 0/8 — *puede* con el
-escenario fácil, pero no de forma consistente). La **varianza entre repeats es 0**:
-no es *flaky*, falla de forma **consistente**. El techo lo pone
-la disciplina de tool-calling, no el framework (§3.3). (El único éxito que vimos
-—`study-with-key` en un smoke suelto— no se repitió en 3 intentos: 0/3.)
+**El resultado más fuerte de la corrida es `pass@k` = 1.0 en `react`.** El agente
+resuelve **los 8 escenarios** en al menos uno de los 3 intentos: no hay ninguno
+que sea incapaz de resolver. Pero `pass^k` = 0.625 — solo en 5 de 8 lo logra las
+tres veces.
+
+Esa brecha entre **capacidad** (1.0) y **confiabilidad** (0.625) es exactamente
+lo que las dos métricas existen para separar, y con el modelo local no se podía
+ver porque ambas daban 0. El límite del agente **no es saber resolver: es la
+consistencia**. Eso reorienta el trabajo pendiente hacia reducir varianza de
+trayectoria, no hacia ampliar capacidades (§5).
+
+En el otro extremo, `summarizer` pierde en todos los ejes a la vez: la mitad de
+accuracy que `react`, **3,4× más tokens por resuelto** (481 k vs. 143 k) y **7×
+peor latencia p95** (217 s vs. 31 s). El §4.1 lo desarrolla.
 
 ### 3.2 Accuracy por dificultad y por escenario
 
-Todas las celdas dan 0 con `qwen2.5:3b`. La vista escenario × config lo hace
-explícito y sirve para leer *dónde* falla cada config (con Bedrock, dónde
-empieza a resolver):
+La accuracy **cae monótonamente con la dificultad** en los cuatro brazos, que es
+lo mínimo que se le pide a un dataset bien graduado:
+
+| Dificultad | `react` | `gate` | `react_generico` | `summarizer` |
+|---|---:|---:|---:|---:|
+| easy | 3/3 | 3/3 | 3/3 | 2/3 |
+| medium | 6/6 | 6/6 | 4/6 | 6/6 |
+| hard | 4/6 | 3/6 | 4/6 | 1/6 |
+| extreme | 6/9 | 4/9 | 4/9 | **0/9** |
 
 ![Tasa de éxito por escenario × config](docs/m3_heatmap.png)
 
-El interés no está en la accuracy —uniformemente 0— sino en **cómo** falla cada
-config, que es donde los experimentos separan aguas (§3.3, §4).
+Dos lecturas que la vista agregada esconde. Primero, **`summarizer` colapsa con
+la dificultad**: va parejo con el resto en `easy`/`medium` y se derrumba a 1/6 y
+**0/9** cuando el horizonte se alarga —justo donde un resumen de estado debería
+ayudar más—. Segundo, `react` y `react_generico` empatan en `hard` (4/6): la
+ventaja del prompt especializado (§4.3) no es pareja, se juega en `medium` y
+`extreme`.
 
 **Óptimo por escenario (BFS, = enunciado):** study-with-key 3 · color-locks 11 ·
 apartment-keys 7 · library-search 7 · office-sequence 13 · extreme-archive 4 ·
@@ -265,11 +287,30 @@ escenarios concretos, partimos los 8 en **dev** (`study-with-key`, `color-locks`
 (`apartment-keys`, `office-sequence`, `vault-combination`, `backtracking-vault`),
 y **iteramos solo sobre dev** (el holdout se mira al final). Nuestras decisiones
 —prompt `escape-v1`, gate, summarizer— son **genéricas** (no dependen de ningún
-escenario), así que no hay riesgo real de overfitting; el holdout lo confirma:
-con `qwen` es 0/4 en dev **y** 0/4 en holdout, y el único bolsillo de éxito de
-todo el barrido (`llama3.2 + summarizer`, §3.5) cae en **dev** (`study-with-key`,
-el más fácil), con holdout uniformemente 0/4. En otras palabras, lo poco que se
-resuelve es el escenario trivial, no un artefacto de haber ajustado a casos vistos.
+escenario), así que no hay riesgo real de overfitting.
+
+Con `nova-lite` el split da **dev 35/48 (0.729)** contra **holdout 24/48
+(0.500)**. La brecha existe, pero **desglosada por dificultad no es
+overfitting** —es lo contrario—:
+
+| Dificultad | dev | holdout |
+|---|---:|---:|
+| easy | 11/12 | — |
+| medium | 10/12 | **12/12** |
+| hard | 5/12 | **7/12** |
+| extreme | 9/12 | 5/24 |
+
+En `medium` y `hard` el **holdout rinde mejor que dev**, que es exactamente lo
+opuesto a haber ajustado a los casos vistos. **Toda la brecha viene de
+`extreme`**, y ahí el problema no es el split sino que los tres escenarios
+`extreme` no son igual de difíciles entre sí: dev aporta solo
+`extreme-archive` (9/12 = 0.75) mientras holdout aporta `vault-combination` y
+`backtracking-vault` (5/24 = 0.21), que son los dos de mayor horizonte del
+dataset (óptimos 21 y 18 contra 4).
+
+Dicho de otro modo: la etiqueta `extreme` agrupa cosas muy distintas, y con un
+solo escenario por celda en dev el split queda desbalanceado. Es una limitación
+del diseño del split, no una señal de sobreajuste.
 
 ### 3.3 Análisis de errores (sobre trazas reales)
 

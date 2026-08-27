@@ -36,6 +36,10 @@ def _cargar(path: Path) -> list[dict]:
 
 
 def main(argv: list[str] | None = None) -> int:
+    #  al entorno: el enunciado pide reproducibilidad sin pasos
+    # manuales, y boto3 lee del entorno, no del archivo.
+    from eval.run import cargar_dotenv
+    cargar_dotenv()
     argv = argv if argv is not None else sys.argv[1:]
     if not argv:
         print(__doc__)

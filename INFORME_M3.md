@@ -1053,10 +1053,10 @@ OLLAMA_HOST=http://localhost:11434 OLLAMA_MODEL=qwen2.5:3b \
   python eval/run.py --repeats 3
 
 # --- Con Bedrock (modelo fuerte; requiere lease + nova-lite habilitado) ---
-# El .env NO se exporta solo: `_env_value` lo lee para poblar el meta de la
-# corrida, pero boto3 lee del ENTORNO. Sin el `set -a` de abajo, el provider
-# se registra como bedrock en el meta y la llamada falla por credenciales.
-set -a && . ./.env && set +a
+# Sin pasos previos: `main()` carga el `.env` al entorno del proceso
+# (`cargar_dotenv` en eval/run.py) porque boto3 lee del ENTORNO, no del
+# archivo. Lo que ya esté exportado gana, así que se puede pisar un valor
+# puntual: BEDROCK_MODEL_ID=amazon.nova-micro-v1:0 python eval/run.py
 python eval/run.py --repeats 3          # toma el provider del .env
 
 # Escalera de capacidad (§3.5): mismo comando cambiando el modelo

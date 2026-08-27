@@ -611,7 +611,13 @@ def run_one(
 
     achieved, reason = check_goal(world, scenario.goal)
 
-    steps = [asdict(s) for s in result.steps] if result else []
+    # Si `run()` crasheó no hay `result`, pero el agente SÍ avanzó: las tools
+    # ya ejecutadas viven en `agent.steps`. Leerlas de ahí evita reportar
+    # `tool_calls: 0` en una corrida que llegó a la iteración 29 —que era lo
+    # que pasaba, y hacía ilegibles los crashes (un caso muerto por
+    # credenciales vencidas se veía igual que uno que nunca arrancó).
+    parcial = result if result is not None else getattr(agent, "partial_result", None)
+    steps = [asdict(s) for s in parcial.steps] if parcial else []
     tool_errors = [s for s in steps if s.get("error")]
 
     # Progreso parcial (observabilidad): cuánto avanzó el mundo aunque el goal
@@ -639,10 +645,16 @@ def run_one(
         "llm_calls": getattr(agent, "llm_calls", 0),
         "max_consecutive_repeats": repeticiones_consecutivas(steps),
         "tool_error_count": len(tool_errors),
-        "agent_input_tokens": (result.input_tokens or 0) if result else 0,
-        "agent_output_tokens": (result.output_tokens or 0) if result else 0,
+        "agent_input_tokens": (parcial.input_tokens or 0) if parcial else 0,
+        "agent_output_tokens": (parcial.output_tokens or 0) if parcial else 0,
         "memory_input_tokens": getattr(agent, "memory_input_tokens", 0),
         "memory_output_tokens": getattr(agent, "memory_output_tokens", 0),
+        # Veces que el summarizer falló y la corrida siguió con el estado
+        # anterior. > 0 significa que el resumen quedó congelado en algún
+        # tramo: la corrida es válida, pero el brazo `summarizer` no operó al
+        # 100 % ahí. Sin esto, la degradación sería invisible.
+        "memory_failures": getattr(agent, "memory_failures", 0),
+        "last_memory_error": getattr(agent, "last_memory_error", None),
         "latency_s": latency,
         "memory_latency_s": round(getattr(agent, "memory_latency_s", 0.0), 3),
         "steps": steps,

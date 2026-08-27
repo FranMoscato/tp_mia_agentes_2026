@@ -516,8 +516,46 @@ Así que el diagnóstico correcto es **por criterio, no global**:
 - `exploracion_ordenada` — referencia **satura en 0.97** y κ = 0.26: acá sigue
   sin poder distinguirse una cosa de la otra.
 
-Un punto de lectura que vale para los tres: un κ bajo **no** equivale a "el judge
-nunca acierta". `acciones_apoyadas` daba κ = 0.00 con **73 % de acuerdo bruto**
+**Self-preference: medido, y no es un sesgo parejo.** El otro anti-patrón de la
+clase. Corrimos el judge **propio** (`nova-lite` juzgando sus propias trazas)
+sobre las **mismas 96** que ya había juzgado el ajeno (`nova-pro`), y comparamos
+caso por caso:
+
+| Config | judge ajeno | judge propio | sesgo |
+|---|---:|---:|---:|
+| `gate` | 2.38 | 2.62 | +0.25 |
+| `react` | 2.33 | 2.71 | +0.38 |
+| `react_generico` | 2.00 | 2.42 | +0.42 |
+| `summarizer` | **1.46** | 2.04 | **+0.58** |
+| **global** | 2.04 | 2.45 | **+0.41** |
+
+El modelo se infla **+0.41 puntos sobre 3 (+20 %)** al juzgarse a sí mismo. Pero
+lo importante es la última columna leída de abajo hacia arriba: **cuanto peor la
+trayectoria, más se auto-premia**. El brazo que peor rinde (`summarizer`) recibe
+más del doble de sesgo que el que mejor rinde (`gate`).
+
+Eso tiene dos consecuencias que un sesgo constante no tendría:
+
+- **Comprime el poder discriminativo un 27 %.** La brecha entre el mejor y el
+  peor brazo cae de 0.92 a 0.67. El judge propio no solo puntúa más alto:
+  **distingue peor**, que es justo lo que un judge existe para hacer.
+- **Da vuelta el ranking.** Con el judge ajeno gana `gate` (2.38 vs. 2.33); con
+  el propio gana `react` (2.71 vs. 2.62). La conclusión sobre *qué configuración
+  produce mejores trayectorias* depende de quién juzga.
+
+El mecanismo se ve por criterio: el judge propio dice "sí" el **97 %** de las
+veces en `exploracion_ordenada` y `acciones_apoyadas` (contra 0.82 y 0.75 del
+ajeno) — **satura exactamente igual que nuestra referencia determinística**, y
+por la misma razón deja de discriminar.
+
+Esto convierte en resultado medido lo que el informe declaraba como limitación
+no cuantificada, y **valida la decisión de diseño** del §2.2: usar un judge
+distinto del agente no era una precaución teórica.
+
+---
+
+Un punto de lectura que vale para los tres criterios: un κ bajo **no** equivale a
+"el judge nunca acierta". `acciones_apoyadas` daba κ = 0.00 con **73 % de acuerdo bruto**
 antes de endurecer la referencia. Cuando una de las dos partes dice "sí" el 96 %
 de las veces, el acuerdo esperado por azar ya es altísimo y κ lo descuenta hasta
 anularlo. Por eso reportamos acuerdo bruto **y** κ: uno solo de los dos engaña.
@@ -565,9 +603,11 @@ falló), así que parte de los κ≈0 son degenerados por falta de varianza. (2)
 explorar en orden (`look`→`examine`→…), que es justo lo que el criterio
 `exploracion_ordenada` puntúa —pasar una dimensión blanda al prompt del agente es,
 en términos de la clase, *entrenar para el examen*; lo declaramos como límite—. (3)
-El self-preference (mismas trazas bajo judge propio vs. ajeno) sigue sin medirse.
-Una calibración definitiva necesita un judge fuerte y trazas con variación real.
-Reproducible: `python eval/kappa.py eval/golden/cases.jsonl`.
+El self-preference **sí lo medimos** (arriba): +0.41 sobre 3, y mayor donde peor
+rinde el brazo. Reproducible: `python eval/kappa.py eval/golden/cases.jsonl`, y
+para el sesgo, correr `eval/judge.py` sobre las mismas trazas con
+`--judge-model amazon.nova-lite-v1:0` y comparar contra `judged.jsonl`
+(guardado como `judged_self.jsonl` en la corrida canónica).
 
 ### 3.5 Comparación cross-modelo / proveedor
 
@@ -1039,8 +1079,12 @@ esconde la forma: el gate no mejora parejo, **rescata un escenario puntual**
   0.66) el judge llega a **κ = 0.55**, acuerdo moderado. Arreglarlo es endurecer
   los umbrales de la referencia, no cambiar el judge.
 
-  (b) **No medimos self-preference** (requiere comparar puntajes de las mismas
-  trazas bajo judge propio vs. ajeno).
+  (b) **Self-preference: medido** (§3.4). El modelo se infla **+0.41 sobre 3
+  (+20 %)** al juzgarse a sí mismo, y el sesgo es **mayor donde peor rinde**
+  (+0.58 en `summarizer` contra +0.25 en `gate`): comprime el poder
+  discriminativo un 27 % y da vuelta el ranking en la cabeza. Ya no es una
+  limitación abierta — es evidencia de por qué el judge tiene que ser distinto
+  del agente.
 - **Sin prompt caching: el 38 % del input se gasta repitiendo el prompt.** El
   system prompt `escape-v1` son ~1.995 tokens y viaja **en cada llamada**. En el
   brazo `react` (24 casos, 516 llamadas al LLM) eso son **~1.029.000 de los

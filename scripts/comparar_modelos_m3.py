@@ -63,6 +63,21 @@ def _cargar_corridas() -> dict[str, dict]:
     return mejor
 
 
+def _suma_tokens(cfg_data: dict | None) -> float | None:
+    """Tokens totales (agente + summarizer) de un brazo, o None si no se corrió.
+
+    Distinguir "no medido" de 0 importa: los brazos que no corrimos no deben
+    dibujar barra (ver `_grouped_bar`).
+    """
+    if not cfg_data:
+        return None
+    agente = cfg_data.get("avg_agent_tokens")
+    memoria = cfg_data.get("avg_memory_tokens")
+    if agente is None and memoria is None:
+        return None
+    return (agente or 0) + (memoria or 0)
+
+
 def _grouped_bar(titulo: str, ylabel: str, valor_fn, archivo: str,
                  corridas: dict[str, dict], ylim=None) -> bool:
     """Barras agrupadas: x=config, un grupo de barras por modelo."""
@@ -134,8 +149,11 @@ def main() -> None:
 
     if _grouped_bar(
         "Costo en tokens por modelo × configuración", "Tokens promedio por caso",
-        lambda run, cfg: (run["by_config"].get(cfg, {}).get("avg_agent_tokens") or 0)
-        + (run["by_config"].get(cfg, {}).get("avg_memory_tokens") or 0),
+        # Devolver None cuando el brazo NO se corrió, en vez de 0: un `or 0` acá
+        # aplanaba el "no medido" a un cero que _grouped_bar ya no puede
+        # distinguir, y `nova-pro` —corrido solo sobre `react`— salía con barra
+        # en 0 en summarizer y gate.
+        lambda run, cfg: _suma_tokens(run["by_config"].get(cfg)),
         "m3_cmp_costo.png", corridas,
     ):
         generados.append("m3_cmp_costo.png")

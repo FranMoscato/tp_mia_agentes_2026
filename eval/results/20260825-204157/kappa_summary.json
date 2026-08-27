@@ -7,8 +7,8 @@
       "judge_yes_rate": 0.82
     },
     "acciones_apoyadas": {
-      "kappa": 0.0,
-      "ref_yes_rate": 0.96,
+      "kappa": -0.056,
+      "ref_yes_rate": 0.75,
       "judge_yes_rate": 0.75
     },
     "sin_redundancia_evitable": {

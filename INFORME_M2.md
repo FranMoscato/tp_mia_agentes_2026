@@ -79,7 +79,7 @@ pytest -q --ignore=tests/conformance/test_m3_world.py \
 | `student_framework/__init__.py` | `build_agent` acepta `max_history_messages`, `max_retries`, `retry_backoff_base` |
 | `student_framework/tools/calculator.py` | Errores recuperables con mensajes accionables |
 | `student_framework/tools/file_reader.py` | Sandbox configurable + validación de rutas + listado de archivos disponibles |
-| `tests/test_m2_propios.py` | 13 tests propios de M2 (resiliencia, recencia, reparación, recuperación) |
+| `tests/test_m2_propios.py` | 14 tests propios de M2 (resiliencia, recencia, reparación, recuperación) |
 
 ---
 

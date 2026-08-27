@@ -1,0 +1,130 @@
+{
+  "meta": {
+    "timestamp": "20260826-205117",
+    "module": "student_framework",
+    "max_iterations": 30,
+    "max_history_messages": null,
+    "repeats": 3,
+    "provider": "bedrock",
+    "model": "amazon.nova-pro-v1:0",
+    "bedrock_model_id": "amazon.nova-pro-v1:0",
+    "aws_profile": "948169713308_udesasbx_IsbUsersPS",
+    "aws_region": "us-east-1",
+    "prompt_version": "escape-v1",
+    "git_commit": "884653a"
+  },
+  "summary": {
+    "n_cases": 24,
+    "by_config": {
+      "react": {
+        "n": 24,
+        "solved": 15,
+        "accuracy": 0.625,
+        "accuracy_ci95": [
+          0.427,
+          0.788
+        ],
+        "pass_hat_k": 0.375,
+        "pass_at_k": 1.0,
+        "k": 3,
+        "pass_k_scenarios": "3/8",
+        "pass_at_k_scenarios": "8/8",
+        "avg_calls_overhead_vs_optimal": 2.47,
+        "avg_tool_calls": 22.29,
+        "latency_p50_s": 29.511,
+        "latency_p95_s": 45.158,
+        "latency_agente_p50_s": 29.511,
+        "latency_summarizer_p50_s": 0.0,
+        "tokens_per_solved": 192136,
+        "avg_agent_tokens": 120084.96,
+        "avg_memory_tokens": 0.0,
+        "cost_usd_total": 2.396025,
+        "cost_usd_per_case": 0.099834,
+        "cost_usd_per_solved": 0.159735,
+        "solve_rate_by_scenario": {
+          "study-with-key": 1.0,
+          "color-locks": 0.333,
+          "library-search": 0.333,
+          "extreme-archive": 0.333,
+          "apartment-keys": 1.0,
+          "office-sequence": 1.0,
+          "vault-combination": 0.667,
+          "backtracking-vault": 0.333
+        },
+        "solve_rate_std": 0.309,
+        "redundancy_distribution": {
+          "1": 18,
+          "17": 1,
+          "2": 3,
+          "3": 2
+        },
+        "tool_usage": {
+          "look": 117,
+          "examine": 173,
+          "take": 52,
+          "use": 46,
+          "go": 147
+        },
+        "invalid_action_rate": 0.0,
+        "avg_progress": {
+          "items_taken": 2.12,
+          "rooms_visited": 2.42,
+          "items_opened": 1.58
+        },
+        "failure_breakdown": {
+          "success": 15,
+          "loop_detected": 2,
+          "exhausted_iterations": 4,
+          "prosa_en_vez_de_tool": 3
+        },
+        "prosa_variant_breakdown": {
+          "otro": 3
+        },
+        "by_difficulty": {
+          "easy": {
+            "n": 3,
+            "solved": 3,
+            "accuracy": 1.0
+          },
+          "extreme": {
+            "n": 9,
+            "solved": 4,
+            "accuracy": 0.444
+          },
+          "hard": {
+            "n": 6,
+            "solved": 4,
+            "accuracy": 0.667
+          },
+          "medium": {
+            "n": 6,
+            "solved": 4,
+            "accuracy": 0.667
+          }
+        }
+      }
+    },
+    "failure_priority": {
+      "success": {
+        "freq": 15,
+        "total_latency_s": 347.2,
+        "avg_latency_s": 23.1
+      },
+      "exhausted_iterations": {
+        "freq": 4,
+        "total_latency_s": 158.3,
+        "avg_latency_s": 39.6
+      },
+      "loop_detected": {
+        "freq": 2,
+        "total_latency_s": 77.7,
+        "avg_latency_s": 38.8
+      },
+      "prosa_en_vez_de_tool": {
+        "freq": 3,
+        "total_latency_s": 61.2,
+        "avg_latency_s": 20.4
+      }
+    }
+  }
+}

@@ -492,6 +492,11 @@ class MyAgent:
         # Tiempo (s) gastado en las llamadas del summarizer, para desglosar la
         # latencia total en agente vs. resumen.
         self.memory_latency_s = 0.0
+        # Veces que el summarizer falló y se siguió con el estado anterior
+        # (ver `update_memory`). Sin este contador, degradar sería silencioso:
+        # la corrida "andaría" con el resumen congelado y nadie se enteraría.
+        self.memory_failures = 0
+        self.last_memory_error: str | None = None
 
         # Llamadas al LLM del último `run()`. El tope de `max_iterations` se
         # cuenta en LLAMADAS, no en tool-calls (un `assistant` puede pedir
@@ -544,12 +549,19 @@ class MyAgent:
         """
 
         resultado = AgentResult(answer="")
+        # Referencia al resultado en curso: si `run()` lanza, el llamador
+        # pierde el valor de retorno pero el progreso parcial (tools ya
+        # ejecutadas, tokens) sigue siendo legible desde acá. El harness lo
+        # usa para no reportar `tool_calls: 0` en corridas que sí avanzaron.
+        self.partial_result = resultado
         self.messages.append({"role": "user", "content": user_message})
 
         # Costo del summarizer de ESTA corrida (ver __init__): arranca en 0.
         self.memory_input_tokens = 0
         self.memory_output_tokens = 0
         self.memory_latency_s = 0.0
+        self.memory_failures = 0
+        self.last_memory_error = None
         self.llm_calls = 0
 
         # Esquemas de las herramientas a exponer al LLM
@@ -1160,6 +1172,23 @@ class MyAgent:
                 max_repair_attempts=3,
                 on_usage=self._acumular_memory_tokens,
             )
+        except Exception as exc:  # noqa: BLE001
+            # El resumen es una AYUDA de contexto, no una precondición para
+            # actuar: si falla, seguimos con el estado anterior en vez de
+            # matar la corrida.
+            #
+            # Sin esto, un fallo transitorio de la API en esta llamada
+            # auxiliar tiraba abajo `run()` entero —con las herramientas ya
+            # ejecutadas y todo—. Medido en Bedrock: ~5 % de las corridas de
+            # `summarizer` (6 de ~120) morían por un `ModelErrorException`
+            # ("Model produced invalid sequence as part of ToolUse"), y era
+            # el ÚNICO brazo expuesto porque es el único que hace esta
+            # llamada extra. `max_repair_attempts` no cubría el caso: repara
+            # salidas que no validan contra el schema, no excepciones de la
+            # API.
+            self.memory_failures += 1
+            self.last_memory_error = repr(exc)
+            return self._state
         finally:
             self.memory_latency_s += time.perf_counter() - t0
 

@@ -1,0 +1,81 @@
+{
+  "id": "archivo-corto",
+  "difficulty": "medium",
+  "description": "Versión corta de extreme-archive: 8 cajones con prosa administrativa en vez de 20. Mismo modo de fallo (ruido de contexto) a un tamaño que no desborda la ventana, para separar 'no puede filtrar ruido' de 'no le entra en el contexto'.",
+  "user_message": "Te despiertas encerrado en una sala de archivo. La puerta tiene una cerradura y en algún cajón hay una llave. Encuentra la forma de salir. Usa las herramientas disponibles para explorar y resolver el puzzle.",
+  "start_room": "archivo",
+  "rooms": {
+    "archivo": {
+      "name": "Sala de archivo",
+      "description": "Una sala con ocho cajones metálicos numerados del 1 al 8, todos etiquetados con códigos administrativos. Al fondo, la puerta de salida.",
+      "items": [
+        "cajon_1", "cajon_2", "cajon_3", "cajon_4",
+        "cajon_5", "cajon_6", "cajon_7", "cajon_8",
+        "puerta_principal"
+      ]
+    }
+  },
+  "items": {
+    "cajon_1": {
+      "name": "cajón 1",
+      "description": "Etiqueta: EXP-1974/AA. Contiene formularios de alta de proveedores, ejercicio 1974, con sellos de la delegación regional. Los folios están ordenados por número de expediente y grapados de a cinco. Ninguno tiene anexos.",
+      "container": true,
+      "contains": []
+    },
+    "cajon_2": {
+      "name": "cajón 2",
+      "description": "Etiqueta: EXP-1975/AB. Actas de recepción de material de oficina, ejercicio 1975. Cada acta lleva firma del responsable de almacén y contrafirma de intervención. Papel amarillento, tinta corrida.",
+      "container": true,
+      "contains": []
+    },
+    "cajon_3": {
+      "name": "cajón 3",
+      "description": "Etiqueta: EXP-1975/BC. Correspondencia interdepartamental sobre reasignación de partidas presupuestarias. Copias en papel carbón, algunas ilegibles. Al fondo del cajón, bajo los legajos, se ve un brillo metálico.",
+      "container": true,
+      "contains": ["llave_archivo"]
+    },
+    "llave_archivo": {
+      "name": "llave del archivo",
+      "description": "Una llave de acero con una etiqueta de cartón atada: SALIDA.",
+      "takeable": true,
+      "hidden_by": "cajon_3"
+    },
+    "cajon_4": {
+      "name": "cajón 4",
+      "description": "Etiqueta: EXP-1976/CD. Expedientes de baja de mobiliario. Cada uno incluye tasación, fotografía en blanco y negro y resolución firmada. Orden alfabético por dependencia.",
+      "container": true,
+      "contains": []
+    },
+    "cajon_5": {
+      "name": "cajón 5",
+      "description": "Etiqueta: EXP-1976/DE. Libros de registro de entrada y salida. Los asientos están numerados de forma correlativa sin saltos, salvo los folios 340 a 352, arrancados.",
+      "container": true,
+      "contains": []
+    },
+    "cajon_6": {
+      "name": "cajón 6",
+      "description": "Etiqueta: EXP-1977/EF. Nóminas del personal eventual de temporada. Hojas de cálculo mecanografiadas con correcciones a mano y sellos de conformidad.",
+      "container": true,
+      "contains": []
+    },
+    "cajon_7": {
+      "name": "cajón 7",
+      "description": "Etiqueta: EXP-1977/FG. Pliegos de condiciones técnicas de contratación menor. Cada pliego lleva su addenda de aclaraciones y el acta de la mesa de contratación.",
+      "container": true,
+      "contains": []
+    },
+    "cajon_8": {
+      "name": "cajón 8",
+      "description": "Etiqueta: EXP-1978/GH. Certificados de obra parcial y sus mediciones. Planos plegados en formato A3, deteriorados por la humedad en los dobleces.",
+      "container": true,
+      "contains": []
+    },
+    "puerta_principal": {
+      "name": "puerta principal",
+      "description": "Una puerta cortafuegos con cerradura de acero y una etiqueta descolorida junto al marco.",
+      "locked": {"requires_item": "llave_archivo"},
+      "open_state": "closed"
+    }
+  },
+  "goal": {"type": "item_open", "item": "puerta_principal"}
+}

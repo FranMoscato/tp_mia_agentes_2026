@@ -1,0 +1,81 @@
+{
+  "id": "invernadero-senuelo",
+  "difficulty": "hard",
+  "description": "Sala única con seis macetas, una sola esconde la llave correcta y otras dos esconden llaves que NO abren. Mide si el agente distingue 'encontré una llave' de 'encontré LA llave', sin costo de navegación.",
+  "user_message": "Te despiertas encerrado en un invernadero. La puerta de salida tiene una cerradura de latón. Hay macetas por todas partes. Encuentra la forma de salir. Usa las herramientas disponibles para explorar y resolver el puzzle.",
+  "start_room": "invernadero",
+  "rooms": {
+    "invernadero": {
+      "name": "Invernadero",
+      "description": "Un invernadero húmedo y cálido. Seis macetas de barro se alinean sobre una mesa larga, todas con plantas distintas. Al fondo, la puerta de salida con una cerradura de latón.",
+      "items": [
+        "maceta_helecho", "maceta_cactus", "maceta_orquidea",
+        "maceta_menta", "maceta_lavanda", "maceta_romero",
+        "puerta_principal"
+      ]
+    }
+  },
+  "items": {
+    "maceta_helecho": {
+      "name": "maceta con helecho",
+      "description": "Un helecho frondoso en barro cocido. La tierra está removida.",
+      "container": true,
+      "contains": ["llave_hierro"]
+    },
+    "llave_hierro": {
+      "name": "llave de hierro",
+      "description": "Una llave de hierro tosca y ennegrecida. El dentado es grueso; no parece de una cerradura fina.",
+      "takeable": true,
+      "hidden_by": "maceta_helecho"
+    },
+    "maceta_cactus": {
+      "name": "maceta con cactus",
+      "description": "Un cactus columnar. La tierra está compacta y seca.",
+      "container": true,
+      "contains": []
+    },
+    "maceta_orquidea": {
+      "name": "maceta con orquídea",
+      "description": "Una orquídea blanca en sustrato de corteza.",
+      "container": true,
+      "contains": ["llave_plata"]
+    },
+    "llave_plata": {
+      "name": "llave de plata",
+      "description": "Una llave plateada, elegante pero fina. El paletón es demasiado estrecho para una cerradura de latón.",
+      "takeable": true,
+      "hidden_by": "maceta_orquidea"
+    },
+    "maceta_menta": {
+      "name": "maceta con menta",
+      "description": "Menta desbordando el borde. Huele fuerte.",
+      "container": true,
+      "contains": []
+    },
+    "maceta_lavanda": {
+      "name": "maceta con lavanda",
+      "description": "Lavanda en flor. La tierra tiene una marca circular, como si algo hubiera sido enterrado y desenterrado.",
+      "container": true,
+      "contains": ["llave_laton"]
+    },
+    "llave_laton": {
+      "name": "llave de latón",
+      "description": "Una llave de latón con el paletón dentado y grueso, del mismo metal que la cerradura de la puerta.",
+      "takeable": true,
+      "hidden_by": "maceta_lavanda"
+    },
+    "maceta_romero": {
+      "name": "maceta con romero",
+      "description": "Un romero leñoso y descuidado.",
+      "container": true,
+      "contains": []
+    },
+    "puerta_principal": {
+      "name": "puerta principal",
+      "description": "Una puerta de vidrio y marco metálico. La cerradura es de latón, con bocallave ancha.",
+      "locked": {"requires_item": "llave_laton"},
+      "open_state": "closed"
+    }
+  },
+  "goal": {"type": "item_open", "item": "puerta_principal"}
+}

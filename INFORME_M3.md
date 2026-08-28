@@ -1048,7 +1048,9 @@ esconde la forma: el gate no mejora parejo, **rescata un escenario puntual**
   **dos corridas idénticas** del mismo brazo y el mismo modelo dieron **0.250 y
   0.125** (`summarizer` en `nova-micro`; z=−1.11, p=0.267). La varianza
   run-to-run es **del mismo orden que los efectos que medimos**, lo que explica
-  por qué dos de los tres experimentos del §4 no alcanzan significancia.
+  por qué **cuatro de los cinco experimentos del §4 no alcanzan significancia**
+  sobre `nova-lite`: solo el summarizer la alcanza (p = 0.0015). El gate sí la
+  alcanza, pero en `nova-micro` (p = 0.0338), que es donde su efecto existe.
 
   El remedio estándar sería fijar la semilla de muestreo para que los brazos
   compartan la realización aleatoria. **Bedrock no lo permite**: verificamos que

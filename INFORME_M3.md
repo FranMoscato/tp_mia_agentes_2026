@@ -247,7 +247,7 @@ diseño es de **bloques** y el test correcto estratifica por escenario
 varianza entre escenarios en el error estándar y tapa efectos reales (§4).
 `python eval/comparar_brazos.py <cases.jsonl>` reporta **ambos** p-valores, el
 efecto escenario por escenario, y **cuántos estratos se descartaron** por no
-tener varianza —un p-valor sobre 4 de 8 estratos no es lo mismo que sobre 8—.
+tener varianza (un p-valor sobre 4 de 8 estratos no es lo mismo que sobre 8).
 
 ---
 
@@ -319,7 +319,7 @@ escenario), así que no hay riesgo real de overfitting.
 
 Con `nova-lite` el split da **dev 35/48 (0.729)** contra **holdout 24/48
 (0.500)**. La brecha existe, pero **desglosada por dificultad no es
-overfitting** —es lo contrario—:
+overfitting** (es lo contrario):
 
 | Dificultad | dev | holdout |
 |---|---:|---:|
@@ -346,7 +346,7 @@ del diseño del split, no una señal de sobreajuste.
 tienen dos orígenes: *deductivo* (a priori, del dominio) e *inductivo* (a
 posteriori, de mirar salidas reales). Arrancamos con categorías genéricas
 razonables (`crash`, `exhausted_iterations`, `tool_errors`…), pero la categoría
-que domina —`prosa_en_vez_de_tool`, con sus variantes— **no se podía imaginar de
+que domina (`prosa_en_vez_de_tool`) **no se podía imaginar de
 antemano**: salió de mirar los traces. Es la advertencia de la clase: *"si
 empezás con categorías, vas a encontrar solo lo que ya sabías"*. Por eso las
 categorías que reportamos están **definidas y verificadas mirando trazas**, no a

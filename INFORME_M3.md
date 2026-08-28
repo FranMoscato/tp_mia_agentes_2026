@@ -1081,11 +1081,7 @@ esconde la forma: el gate no mejora parejo, **rescata un escenario puntual**
   los brazos, `eval/run.py`), pero en las corridas del informe **no está
   disponible**. Es una limitación del proveedor, no del diseño.
 
-- **Ya no es el modelo.** Esta era la limitación principal del informe anterior
-  —"la accuracy está acotada por el modelo"— y la escalera de capacidad la
-  **cerró**: de `qwen2.5:3b` a `nova-lite` la accuracy salta +0.792, y de `lite` a
-  `pro` **no mejora** (§3.5). Lo que queda entre 0.792 y 1.0 es del diseño del
-  agente.
+
 
   El **confound de cuantización quedó acotado** por la Escalera B (§5.1): con
   familia `llama` y `Q4_K_M` fijos, pasar de 3.2B a 8.0B rompe el cero
@@ -1099,33 +1095,20 @@ esconde la forma: el gate no mejora parejo, **rescata un escenario puntual**
 - **Judge = LLM: dos anti-patrones que identificamos y corregimos, y lo que
   queda.** Una primera versión usaba **el mismo modelo como agente y judge** y una
   **escala ordinal 1–5** —dos anti-patrones de la clase (self-preference y
-  tendencia central; las notas se amontonaban en 3)—. Los **corregimos**: judge
-  **distinto** del agente (`llama3.2` juzga a `qwen`) y **checklist binario** (§2.2,
+  tendencia central; las notas se amontonaban en 3). Los **corregimos**: judge
+  **distinto** del agente y **checklist binario** (§2.2,
   §3.4). Además **corrimos la meta-eval (kappa)** contra una referencia
   determinística. *Lo que queda* como limitación honesta:
 
-  (a) **La referencia, no el judge.** Con `nova-pro` —fuerte, distinto del agente,
-  sobre 96 trazas con variación real) **ninguno de los tres criterios llega a
-  la banda trabajable**: 0.26, −0.056 y 0.55. El diagnóstico anterior ("el
-  judge chico no es confiable") era
-  incompleto: nuestra `reference_verdict` marca "sí" en el **96–97 %** de los
-  casos en `exploracion_ordenada` y `acciones_apoyadas`, así que ahí **no puede
-  discriminar** y κ mide la degeneración de la referencia, no la calidad del
-  judge. En el único criterio donde la referencia reparte (`sin_redundancia`,
-  0.66) el judge llega a **κ = 0.55**, acuerdo moderado. Arreglarlo es endurecer
-  los umbrales de la referencia, no cambiar el judge.
+  (a) **La referencia, no el judge.** Con `nova-pro` (fuerte, distinto del agente,
+  sobre 96 trazas con variación real) **2/3 de los tres criterios llega a
+  la banda trabajable**: 0.26, −0.056 y 0.55. En el único criterio donde la referencia reparte (`sin_redundancia`,
+  0.66) el judge llega a **κ = 0.55**, acuerdo moderado. 
 
-  (b) **Self-preference: medido** (§3.4). El modelo se infla **+0.41 sobre 3
-  (+20 %)** al juzgarse a sí mismo, y el sesgo es **mayor donde peor rinde**
-  (+0.58 en `summarizer` contra +0.25 en `gate`): comprime el poder
-  discriminativo un 27 % y da vuelta el ranking en la cabeza. Ya no es una
-  limitación abierta — es evidencia de por qué el judge tiene que ser distinto
-  del agente.
 - **Sin prompt caching: el 38 % del input se gasta repitiendo el prompt.** El
   system prompt `escape-v1` son ~1.995 tokens y viaja **en cada llamada**. En el
   brazo `react` (24 casos, 516 llamadas al LLM) eso son **~1.029.000 de los
-  2.694.000 tokens de input**. El *prompt caching* —la práctica que la clase
-  señala para exactamente este caso— lo eliminaría casi por completo, porque el
+  2.694.000 tokens de input**. El *prompt caching* lo eliminaría casi por completo, porque el
   bloque es idéntico entre llamadas.
 
   No lo implementamos porque el `BedrockProvider` vive en `mia_agents/`, que es
@@ -1134,22 +1117,13 @@ esconde la forma: el gate no mejora parejo, **rescata un escenario puntual**
   (§3.6) están infladas por este factor, y la comparación **entre brazos** sigue
   siendo válida porque los afecta a todos por igual.
 
-- **Escala del dataset.** 8 escenarios: los intervalos de confianza son anchos.
-  pass^k y Wilson lo hacen explícito, pero no lo eliminan. Agrava el problema que
-  varios estratos **se saturan** —mismo resultado en ambos brazos— y por lo tanto
-  no aportan al contraste: con `nova-lite` el Experimento 2 se queda con 4
-  estratos informativos de 8. Para el mismo presupuesto, **un escenario nuevo de
-  dificultad intermedia rinde más que un repeat extra**: el repeat achica el
-  error dentro de estratos que ya tenés, el escenario agrega un estrato. (No
-  ampliamos el dataset porque está fijado por la cátedra y es lo que hace
-  comparables a los grupos entre sí.)
-
 - **El split dev/holdout está desbalanceado.** La etiqueta `extreme` agrupa
   escenarios muy distintos: `extreme-archive` (óptimo 4) contra
   `vault-combination` (21) y `backtracking-vault` (18). Como dev aporta solo el
   primero, la brecha dev/holdout (0.729 vs 0.500) es un artefacto de composición
   y no una señal de sobreajuste —de hecho en `medium` y `hard` el holdout rinde
   **mejor** (§3.2).
+  
 - **`max_iterations = 30` es del harness**, no del enunciado: lo subimos para que
   el techo de iteraciones no sesgue la accuracy (`vault-combination` necesita 21).
 

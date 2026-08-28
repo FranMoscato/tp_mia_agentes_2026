@@ -977,14 +977,7 @@ esconde la forma: el gate no mejora parejo, **rescata un escenario puntual**
 
 - **Conclusión.** El prompt de dominio compra **eficiencia de trayectoria**, no
   capacidad de actuar. Ambos brazos llaman herramientas con la misma intensidad;
-  `escape-v1` llega más seguido porque las ordena mejor. Esto **actualiza la
-  conclusión anterior** —escrita con el modelo local, donde decíamos que el prompt
-  importaba para *cómo* falla y no para *si* resuelve—: con un modelo capaz sí
-  mueve la accuracy, aunque con n=24 no podamos declararlo significativo.
-
-  Es, además, el experimento que más se beneficiaría de más datos: es el único de
-  los tres donde el efecto apunta claro en una dirección y solo falta potencia
-  estadística para confirmarlo.
+  `escape-v1` llega más seguido porque las ordena mejor. 
 
 ### 4.4 Experimento 4 — Corte de loop en runtime (Clase 7)
 

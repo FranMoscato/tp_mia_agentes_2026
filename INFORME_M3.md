@@ -241,13 +241,37 @@ contrastes estadísticos tienen sus test individuales.
 [`tests/test_judge.py`](tests/test_judge.py),
 [`tests/test_eval_stats.py`](tests/test_eval_stats.py)).
 
-**Contrastes entre brazos.** Como los brazos corren los mismos escenarios, el
-diseño es de **bloques** y el test correcto estratifica por escenario
-(Cochran–Mantel–Haenszel, [`eval/stats.py`](eval/stats.py)); el agrupado mete la
-varianza entre escenarios en el error estándar y tapa efectos reales (§4).
-`python eval/comparar_brazos.py <cases.jsonl>` reporta **ambos** p-valores, el
-efecto escenario por escenario, y **cuántos estratos se descartaron** por no
-tener varianza (un p-valor sobre 4 de 8 estratos no es lo mismo que sobre 8).
+**Cómo comparamos dos brazos (y por qué no alcanza con juntar todo).**
+
+Digamos que queremos saber si `gate` es mejor que `react`. Lo intuitivo es juntar
+todos los casos de cada uno y comparar los dos porcentajes. **Eso pierde
+información**, porque los dos brazos corrieron **los mismos 8 escenarios**, y los
+escenarios son muy distintos entre sí: en `study-with-key` casi todo sale bien
+(accuracy 1.00) y en `backtracking-vault` casi nada (0.14). Al mezclarlos, esa
+diferencia *entre escenarios* (que no tiene nada que ver con el brazo) se suma al
+ruido y tapa la diferencia que sí queremos ver.
+
+La solución es **comparar dentro de cada escenario y después combinar**. A cada
+escenario lo llamamos un **estrato**: comparamos `react` vs. `gate` en
+`study-with-key`, después en `color-locks`, y así con los ocho; recién al final se
+juntan los ocho resultados en un solo número. Ese es el test de
+**Cochran–Mantel–Haenszel** ([`eval/stats.py`](eval/stats.py)).
+
+Dos consecuencias prácticas:
+
+- **Un escenario donde los dos brazos dan lo mismo no aporta nada** y queda
+  afuera. Con `nova-micro`, `backtracking-vault` y `vault-combination` dan 0/8 en
+  ambos brazos: no hay nada que comparar ahí. Por eso el informe siempre aclara
+  **sobre cuántos estratos** se calculó cada p-valor: uno sobre 4 de 8 escenarios
+  es más débil que uno sobre 8.
+- **Cambia conclusiones.** En el Experimento 2, juntar todo da p = 0.0957 (no
+  concluyente) y estratificar da p = 0.0338 (significativo), **con exactamente los
+  mismos 128 casos**. Por eso reportamos los dos números y no solo el que nos
+  conviene.
+
+Se genera con `python eval/comparar_brazos.py <cases.jsonl>`, que además imprime
+el efecto **escenario por escenario**, porque el promedio esconde la forma: el
+gate no mejora parejo, rescata un escenario puntual (§4.2).
 
 ---
 

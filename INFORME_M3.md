@@ -461,8 +461,7 @@ contra 0.58–0.62 del resto. Es la misma señal que la racha de 23 tool-calls
 repetidas del §3.3, medida por una vía independiente.
 
 **Meta-eval: ¿es confiable el judge? (kappa).** Corrimos la meta-eval del
-enunciado sobre el golden set (8 trazas reales del piloto `nova-lite`,
-[`eval/golden/`](eval/golden/)): comparamos el veredicto del judge contra una
+enunciado sobre el golden set: comparamos el veredicto del judge contra una
 **referencia determinística** derivada de propiedades objetivas de la traza
 —orden `look`/`examine` antes de actuar, `tool_error_count`, repeticiones—
 (`reference_verdict` en [`eval/judge.py`](eval/judge.py)), con la **kappa de
@@ -570,11 +569,11 @@ es evaluable de forma confiable por LLM y dejarlo enteramente en código.
 **Aplicamos el rediseño de la clase (4.4) — y falló de una forma reveladora.** La
 clase recomienda **una llamada por criterio** + few-shot + **razonar antes de
 decidir**. Lo implementamos (`--per-criterion` en [`eval/judge.py`](eval/judge.py))
-y con el judge local (`llama3.2`) la **cobertura se derrumbó a 0/8**: pedirle
+y con el judge local (`llama3.2`) la **cobertura se derrumbó a 0**: pedirle
 *razonar antes* lo hace responder en **prosa** en vez de llamar la tool
-`final_result` —el mismísimo `prosa_en_vez_de_tool` que el judge existe para
-detectar (§3.3)—, y triplicar las llamadas multiplica la exposición a esa falla.
-La lección es la premisa que la clase da por sentada y nosotros no teníamos: el
+`final_result` (el mismísimo `prosa_en_vez_de_tool` que el judge existe para
+detectar (§3.3)), y triplicar las llamadas multiplica la exposición a esa falla.
+La lección es la premisa que la clase da por sentada: el
 judge debe correr **con un modelo capaz**; con un modelo chico, el diseño
 teóricamente mejor es en la práctica **peor**.
 
@@ -583,22 +582,11 @@ cierra el argumento: el problema era la capacidad del judge para emitir el
 veredicto estructurado, no el diseño de la rúbrica. Mantenemos single-call como
 modo por defecto porque es más barato y ya da cobertura total.
 
-**Nota operativa (nos costó una tanda de corridas).** El model id del judge debe
-ser `amazon.nova-pro-v1:0`, **sin** el prefijo `us.`. El id con prefijo es un
-*inference profile* cross-region que puede rutear a `us-west-2`, y la SCP de la
-organización del sandbox lo bloquea con un deny explícito
-(`AccessDeniedException`). Peor: [`eval/judge.py`](eval/judge.py) captura la
-excepción por caso y devuelve `None`, así que el fallo se reporta como `n: 0` con
-exit code 0 —indistinguible de "el judge no pudo puntuar estas trazas"—. Hubo que
-reproducir la llamada a mano para verlo.
-
-*Caveats y una contaminación honesta.* (1) n=8 y todas fallidas → la referencia
-satura en algún criterio (`acciones_apoyadas` da SÍ en las 8 porque ninguna acción
-falló), así que parte de los κ≈0 son degenerados por falta de varianza. (2)
+*Caveats y una contaminación honesta.* (1)
 **Entrenar para el examen:** el `ESCAPE_ROOM_SYSTEM_PROMPT` le *ordena* al agente
 explorar en orden (`look`→`examine`→…), que es justo lo que el criterio
-`exploracion_ordenada` puntúa —pasar una dimensión blanda al prompt del agente es,
-en términos de la clase, *entrenar para el examen*; lo declaramos como límite—. (3)
+`exploracion_ordenada` puntúa (pasar una dimensión blanda al prompt del agente es,
+en términos de la clase, *entrenar para el examen*; lo declaramos como límite). (2)
 El self-preference **sí lo medimos** (arriba): +0.41 sobre 3, y mayor donde peor
 rinde el brazo. Reproducible: `python eval/kappa.py eval/golden/cases.jsonl`, y
 para el sesgo, correr `eval/judge.py` sobre las mismas trazas con

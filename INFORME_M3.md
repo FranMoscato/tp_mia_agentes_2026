@@ -471,9 +471,9 @@ mismo LLM): evita la circularidad, y es uno de los **dos golden sets** que
 distingue la clase —el *del judge* (output + etiqueta), no el *del agente*
 (tarea + comportamiento esperado)—.
 
-Con el judge fuerte, sobre las 96 trazas de la corrida canónica (59 éxitos y 37
+Con el judge, sobre las 96 trazas de la corrida canónica (59 éxitos y 37
 fallos, o sea **con variación real**, a diferencia de las 8 trazas fallidas del
-piloto):
+piloto) obtuvimos los siguientes resultados:
 
 | Criterio | acuerdo bruto | **κ** | ref dice "sí" | judge dice "sí" |
 |---|---:|---:|---:|---:|
@@ -481,12 +481,10 @@ piloto):
 | `exploracion_ordenada` | 0.85 | 0.26 | **0.97** | 0.82 |
 | `acciones_apoyadas` | 0.73 | **0.00** | **0.96** | 0.75 |
 
-**Acá cambia la conclusión que traía este informe.** La versión anterior
-atribuía el κ≈0 a que *el judge chico no era confiable*. Con un judge fuerte,
-distinto del agente y sobre trazas con variación, **dos de los tres criterios
-siguen en κ≈0**. Así que el judge no era (solo) el problema.
+Encontrándonos con un problema,  **dos de los tres criterios
+estan en κ≈0**.
 
-**Y lo pusimos a prueba.** La hipótesis inmediata fue que el culpable era la
+La hipótesis inmediata fue que el culpable era la
 **referencia saturada**, así que endurecimos `acciones_apoyadas`: además de
 exigir cero tool-errors, ahora exige que todo `use(item=X)` venga después de un
 `take(item=X)` exitoso —la misma garantía que el gate impone por código (§4.2),
@@ -501,7 +499,7 @@ tasa de "sí" bajó de **0.96 a 0.75**: la referencia pasó a discriminar.
 
 **La hipótesis se refutó a medias, y eso es más informativo que si hubiera
 funcionado.** Con la referencia ya discriminando, la kappa de `acciones_apoyadas`
-**siguió en cero**. Fijate que ambas partes reparten en la misma proporción
+**siguió en cero**. Ambas partes reparten en la misma proporción
 (0.75 y 0.75) pero κ = −0.056: coinciden en *cuántos* casos marcan, y no en
 *cuáles*. Es acuerdo al nivel del azar.
 

@@ -366,16 +366,16 @@ Sobre 24 casos por config (8 escenarios × 3 repeats), con `nova-lite`:
 | `summarizer` | 9 | 3 | **9** | 1 | **2** |
 
 **El modo de fallo dominante cambió de naturaleza al cambiar el modelo.** Con
-`qwen2.5:3b` era `prosa_en_vez_de_tool` —el agente describía la acción en vez de
-emitirla, y el loop se cerraba antes de actuar—. Con `nova-lite` ese modo
+`qwen2.5:3b` era `prosa_en_vez_de_tool` (el agente describía la acción en vez de
+emitirla, y el loop se cerraba antes de actuar). Con `nova-lite` ese modo
 **prácticamente desaparece**: 0 casos en `react`, 2 en `react_generico`, 1 en
 `summarizer`.
 
 Eso es un resultado, no una nota al pie. `prosa_en_vez_de_tool` es un fallo del
 **protocolo**: en términos de la Clase 3, el modelo devuelve texto
 (`stopReason = end_turn`) donde debía emitir un `toolUse`. Ese fallo **no dice
-nada sobre el diseño del agente** —el motor de tool-use de M1 está bien, el
-modelo chico no lo acciona—. Los modos que quedan sí hablan del diseño:
+nada sobre el diseño del agente** (el motor de tool-use de M1 está bien, el
+modelo chico no lo acciona). Los modos que quedan sí hablan del diseño:
 
 - **`exhausted_iterations`** (3 a 7 por brazo): el agente actúa correctamente
   pero no le alcanzan las 30 iteraciones. Es un fallo de **eficiencia de
@@ -397,7 +397,7 @@ máxima de tool-calls idénticas consecutivas es la medida directa:
 Veintitrés llamadas idénticas seguidas. Re-inyectar un estado resumido en cada
 turno **no ancla al agente, lo encierra**: si el resumen omite o deforma el
 efecto de la última acción, el agente vuelve a intentarla, y el resumen siguiente
-—derivado de esa misma interacción— vuelve a omitirla. El §4.1 cierra el
+(derivado de esa misma interacción) vuelve a omitirla. El §4.1 cierra el
 argumento con el contraste estadístico.
 
 ![Redundancia: racha máxima de tool-calls repetidas](docs/m3_redundancia.png)

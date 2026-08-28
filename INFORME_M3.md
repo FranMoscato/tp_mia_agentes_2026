@@ -668,29 +668,45 @@ Un dato que refuerza la lectura: `nova-pro` tiene **`pass@k` = 1.0 igual que
 contra 0.625**. Un modelo más capaz que resuelve lo mismo con *más* varianza
 apunta a que el límite está en la trayectoria, no en el razonamiento.
 
-**Lo que esta escalera NO autoriza a decir.** Que el techo sea del *tamaño*. La
-cuantización a 4 bits (`Q4_K_M`) de los dos modelos locales cambia junto con el
-tamaño, y golpea justo donde fallan —disciplina de tool-calling y salida
-estructurada—. Separar ambos ejes requiere correr `qwen2.5:7b` (mismo Q4, otro
-tamaño) y `qwen2.5:3b` sin cuantizar (mismo tamaño, otra precisión): §5.1.
+**Lo que esta escalera NO autoriza a decir.** Que el techo sea del *tamaño*.
+Entre los modelos locales y Nova cambian cuatro cosas a la vez: tamaño,
+cuantización (los locales corren en `Q4_K_M`, 4 bits), familia de entrenamiento y
+API. La cuantización golpea justo donde estos modelos fallan (disciplina de
+tool-calling y salida estructurada), así que no se puede separar de un vistazo.
+
+**Ese confound está acotado, no eliminado.** La Escalera B del §5.1 lo ataca con
+los tres modelos locales: `llama3.2` (3.2B) y `llama3.1` (8.0B) son **la misma
+familia con la misma cuantización**, así que entre esos dos solo cambia el
+tamaño, y pasar a 8B **rompe el cero** (`gate` 0/24 → 4/24, p = 0.037). O sea que
+el 0/24 de los chicos **no era solo daño por cuantizar**. Lo que sigue sin poder
+atribuirse es la brecha entre el 8B local (0.125) y `nova-lite` (0.792), donde las
+otras tres variables siguen mezcladas.
 
 #### Cómo falla cada modelo
 
 **Hallazgo 1 — el modo de fallo cambia de naturaleza con la capacidad.** No es
 que un modelo falle "más": fallan por razones distintas.
 
-| Modelo | Modo dominante | Uso de `use`/`go` |
+| Modelo | Modo dominante (brazo `react`) | Uso de `use`/`go` |
 |---|---|---|
-| `qwen2.5:3b` | **prosa** (no actúa) | ~0 |
-| `llama3.2` | **tool_errors** (actúa, pero inválido) | usa ambos, con errores |
-| `nova-lite` | **exhausted_iterations** / **loops** (actúa bien, no llega) | 92 `use`, 109 `go` (§3.6) |
+| `qwen2.5:3b` (3.1B) | **prosa** (no actúa) | ~0 |
+| `llama3.2` (3.2B) | **tool_errors** (actúa, pero inválido) | usa ambos, con errores |
+| `llama3.1` (8.0B) | **exhausted_iterations** (13) + prosa (8) | 100 `use`, 110 `go` |
+| `nova-lite` | **exhausted_iterations** (3) / **loops** (2) | 92 `use`, 109 `go` (§3.6) |
 
-Los dos locales fallan **antes** del razonamiento: uno describe la acción en vez
-de emitirla, el otro se equivoca de objeto. Esos fallos no dicen nada sobre el
-diseño del agente. Con `nova-lite` el fallo se corre aguas abajo —el agente actúa
-correctamente pero se queda sin iteraciones o entra en loop—, y **recién ahí los
-experimentos del §4 miden el framework y no el modelo**. Era exactamente la
-condición que este informe necesitaba para poder concluir algo.
+La progresión se lee de arriba hacia abajo. Los dos modelos de ~3B fallan
+**antes** del razonamiento: uno describe la acción en vez de emitirla, el otro se
+equivoca de objeto. Esos fallos no dicen nada sobre el diseño del agente, solo
+sobre el modelo.
+
+`llama3.1` (8B) es el punto de quiebre: **ya usa los cinco verbos con la misma
+intensidad que `nova-lite`** (100 `use` contra 92) pero todavía arrastra 8 casos
+de prosa y se queda sin iteraciones en 13. Actúa, pero no llega.
+
+Con `nova-lite` la prosa desaparece del todo y quedan solo fallos de trayectoria
+—sin iteraciones o en loop—, y **recién ahí los experimentos del §4 miden el
+framework y no el modelo**. Era exactamente la condición que este informe
+necesitaba para poder concluir algo.
 
 **Hallazgo 2 — el orden de los brazos segun accuracy depende del modelo.** Es el resultado más
 interesante de la comparación cross-modelo, y un solo modelo lo habría ocultado:

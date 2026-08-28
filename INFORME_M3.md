@@ -1101,7 +1101,7 @@ esconde la forma: el gate no mejora parejo, **rescata un escenario puntual**
   determinística. *Lo que queda* como limitación honesta:
 
   (a) **La referencia, no el judge.** Con `nova-pro` (fuerte, distinto del agente,
-  sobre 96 trazas con variación real) **2/3 de los tres criterios llega a
+  sobre 96 trazas con variación real) **2/3 de los tres criterios no llegan a
   la banda trabajable**: 0.26, −0.056 y 0.55. En el único criterio donde la referencia reparte (`sin_redundancia`,
   0.66) el judge llega a **κ = 0.55**, acuerdo moderado. 
 

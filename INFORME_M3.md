@@ -426,8 +426,8 @@ loops —y el §3.3 ya mostró quién los produce: el `summarizer`, con 9 de los
 Vale notar que **esta priorización se dio vuelta respecto de la corrida local**.
 Con `qwen2.5:3b` el modo más frecuente era `prosa_en_vez_de_tool` (67 casos) y
 los loops eran raros pero caros (3 casos, 155 s cada uno). Ahora la prosa cayó a
-3 casos y los loops se cuadruplicaron. La conclusión metodológica —priorizar por
-frecuencia × costo, no por frecuencia— **sobrevivió al cambio de modelo**; la
+3 casos y los loops se cuadruplicaron. La conclusión metodológica (priorizar por
+frecuencia × costo, no por frecuencia) **sobrevivió al cambio de modelo**; la
 lista concreta de prioridades, no.
 
 ### 3.4 Resultados cualitativos (LLM-as-judge)

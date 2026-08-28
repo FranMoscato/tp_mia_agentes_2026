@@ -228,7 +228,7 @@ allá del éxito binario.
   por azar —un judge que siempre dice lo mismo puede tener 95% de accuracy y
   κ = 0—. Bandas: κ < 0.4 recalibrar, 0.4–0.6 tolerable, 0.6–0.8 trabajable. Si el
   kappa es bajo, no usamos sus números aunque el judge ya esté construido (es lo
-  que pasó: κ ≈ 0, §3.4).
+  que pasó con dos de los tres criterios, §3.4).
 
 ### 2.3 Cómo se computan (reproducibilidad)
 
@@ -242,13 +242,37 @@ contrastes estadísticos están **testeados sin LLM**
 [`tests/test_judge.py`](tests/test_judge.py),
 [`tests/test_eval_stats.py`](tests/test_eval_stats.py)).
 
-**Contrastes entre brazos.** Como los brazos corren los mismos escenarios, el
-diseño es de **bloques** y el test correcto estratifica por escenario
-(Cochran–Mantel–Haenszel, [`eval/stats.py`](eval/stats.py)); el agrupado mete la
-varianza entre escenarios en el error estándar y tapa efectos reales (§4).
-`python eval/comparar_brazos.py <cases.jsonl>` reporta **ambos** p-valores, el
-efecto escenario por escenario, y **cuántos estratos se descartaron** por no
-tener varianza —un p-valor sobre 4 de 8 estratos no es lo mismo que sobre 8—.
+**Cómo comparamos dos brazos (y por qué no alcanza con juntar todo).**
+
+Supongamos que queremos saber si `gate` es mejor que `react`. Lo intuitivo es
+juntar los 32 casos de cada uno y comparar los dos porcentajes. **Eso pierde
+información**, porque los dos brazos corrieron **los mismos 8 escenarios**, y los
+escenarios son muy distintos entre sí: en `study-with-key` casi todo sale bien
+(accuracy ~1.00) y en `backtracking-vault` casi nada (~0.14). Al mezclarlos, esa
+diferencia *entre escenarios* —que no tiene nada que ver con el brazo— se suma al
+ruido y tapa la diferencia que sí queremos ver.
+
+La solución es **comparar dentro de cada escenario y después combinar**. A cada
+escenario lo llamamos un **estrato**: comparamos `react` vs. `gate` en
+`study-with-key`, después en `color-locks`, y así con los ocho; recién al final
+se juntan los ocho resultados en un solo número. Ese es el test de
+**Cochran–Mantel–Haenszel** ([`eval/stats.py`](eval/stats.py)).
+
+Dos consecuencias prácticas:
+
+- **Un escenario donde los dos brazos dan lo mismo no aporta nada** y queda
+  afuera. Con `nova-micro`, `backtracking-vault` y `vault-combination` dan 0/8 en
+  ambos: no hay nada que comparar ahí. Por eso el informe siempre dice **sobre
+  cuántos estratos** se calculó cada p-valor: uno sobre 4 de 8 escenarios es más
+  débil que uno sobre 8.
+- **Cambia conclusiones.** En el Experimento 2, juntar todo da p = 0.0957 (no
+  concluyente) y estratificar da p = 0.0338 (significativo), **con exactamente
+  los mismos 128 casos**. Por eso reportamos los dos números y no solo el que
+  nos conviene.
+
+Se genera con `python eval/comparar_brazos.py <cases.jsonl>`, que además imprime
+el efecto **escenario por escenario** — porque el promedio esconde la forma: el
+gate no mejora parejo, rescata un escenario puntual (§4.2).
 
 ---
 
@@ -476,6 +500,8 @@ Con el judge fuerte, sobre las 96 trazas de la corrida canónica (59 éxitos y 3
 fallos, o sea **con variación real**, a diferencia de las 8 trazas fallidas del
 piloto):
 
+**Tabla A — primera medición** (referencia original):
+
 | Criterio | acuerdo bruto | **κ** | ref dice "sí" | judge dice "sí" |
 |---|---:|---:|---:|---:|
 | `sin_redundancia_evitable` | 0.77 | **0.55** | 0.66 | 0.47 |
@@ -483,9 +509,10 @@ piloto):
 | `acciones_apoyadas` | 0.73 | **0.00** | **0.96** | 0.75 |
 
 **Acá cambia la conclusión que traía este informe.** La versión anterior
-atribuía el κ≈0 a que *el judge chico no era confiable*. Con un judge fuerte,
-distinto del agente y sobre trazas con variación, **dos de los tres criterios
-siguen en κ≈0**. Así que el judge no era (solo) el problema.
+atribuía la kappa baja a que *el judge chico no era confiable*. Con un judge
+fuerte, distinto del agente y sobre trazas con variación, **ninguno de los tres
+criterios llega a la banda trabajable (0.6–0.8)**: dan **0.26**, **−0.056** y
+**0.55** (tabla arriba). Así que el judge no era (solo) el problema.
 
 **Y lo pusimos a prueba.** La hipótesis inmediata fue que el culpable era la
 **referencia saturada**, así que endurecimos `acciones_apoyadas`: además de
@@ -494,10 +521,13 @@ exigir cero tool-errors, ahora exige que todo `use(item=X)` venga después de un
 o sea una propiedad del dominio y no un umbral elegido para mover el número—. Su
 tasa de "sí" bajó de **0.96 a 0.75**: la referencia pasó a discriminar.
 
+**Tabla B — segunda medición**, tras endurecer `acciones_apoyadas`. Es la única
+fila que cambia respecto de la Tabla A; las otras dos están para comparar:
+
 | Criterio | ref dice "sí" | judge dice "sí" | κ |
 |---|---:|---:|---:|
 | `sin_redundancia_evitable` | 0.66 | 0.47 | **0.55** |
-| `acciones_apoyadas` (endurecida) | **0.75** | 0.75 | **−0.056** |
+| `acciones_apoyadas` (**endurecida**) | 0.96 → **0.75** | 0.75 | 0.00 → **−0.056** |
 | `exploracion_ordenada` | 0.97 | 0.82 | 0.26 |
 
 **La hipótesis se refutó a medias, y eso es más informativo que si hubiera
@@ -596,9 +626,10 @@ excepción por caso y devuelve `None`, así que el fallo se reporta como `n: 0` 
 exit code 0 —indistinguible de "el judge no pudo puntuar estas trazas"—. Hubo que
 reproducir la llamada a mano para verlo.
 
-*Caveats y una contaminación honesta.* (1) n=8 y todas fallidas → la referencia
-satura en algún criterio (`acciones_apoyadas` da SÍ en las 8 porque ninguna acción
-falló), así que parte de los κ≈0 son degenerados por falta de varianza. (2)
+*Caveats y una contaminación honesta.* (1) La saturación de la referencia, ya
+desarrollada arriba: en `exploracion_ordenada` marca "sí" en el 97 % de los casos
+y por eso su κ = 0.26 no se puede leer como "el judge falla" —el acuerdo esperado
+por azar ya es altísimo—. (2)
 **Entrenar para el examen:** el `ESCAPE_ROOM_SYSTEM_PROMPT` le *ordena* al agente
 explorar en orden (`look`→`examine`→…), que es justo lo que el criterio
 `exploracion_ordenada` puntúa —pasar una dimensión blanda al prompt del agente es,
@@ -1070,8 +1101,9 @@ esconde la forma: el gate no mejora parejo, **rescata un escenario puntual**
   determinística. *Lo que queda* como limitación honesta:
 
   (a) **La referencia, no el judge.** Con `nova-pro` —fuerte, distinto del agente,
-  sobre 96 trazas con variación real— **dos de los tres criterios siguen en
-  κ≈0**. El diagnóstico anterior ("el judge chico no es confiable") era
+  sobre 96 trazas con variación real— **ninguno de los tres criterios llega a
+  la banda trabajable**: 0.26, −0.056 y 0.55. El diagnóstico anterior ("el
+  judge chico no es confiable") era
   incompleto: nuestra `reference_verdict` marca "sí" en el **96–97 %** de los
   casos en `exploracion_ordenada` y `acciones_apoyadas`, así que ahí **no puede
   discriminar** y κ mide la degeneración de la referencia, no la calidad del

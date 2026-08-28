@@ -472,8 +472,7 @@ distingue la clase —el *del judge* (output + etiqueta), no el *del agente*
 (tarea + comportamiento esperado)—.
 
 Con el judge, sobre las 96 trazas de la corrida canónica (59 éxitos y 37
-fallos, o sea **con variación real**, a diferencia de las 8 trazas fallidas del
-piloto) obtuvimos los siguientes resultados:
+fallos) obtuvimos los siguientes resultados:
 
 | Criterio | acuerdo bruto | **κ** | ref dice "sí" | judge dice "sí" |
 |---|---:|---:|---:|---:|

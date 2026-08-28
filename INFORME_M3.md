@@ -413,8 +413,8 @@ priorizar por frecuencia esconde los modos raros pero caros. Lo computamos
 | `crash` | 2 | **132.8 s** | 265,6 s |
 | `prosa_en_vez_de_tool` | 3 | 40.4 s | 121,1 s |
 
-*(`success` aparece en el JSON con 59 casos y 1.460,5 s: no es un fallo, pero
-sirve de referencia —los loops solos cuestan más tiempo que todos los éxitos
+*`success` aparece en el JSON con 59 casos y 1.460,5 s: no es un fallo, pero
+sirve de referencia (los loops solos cuestan más tiempo que todos los éxitos
 juntos.)*
 
 Por **frecuencia** el modo dominante es `exhausted_iterations` (20 vs. 12). Pero

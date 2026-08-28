@@ -201,8 +201,8 @@ el enunciado en los 8/8 escenarios, así que la métrica queda cross-validada.
 
 La dimensión es **calidad de la trayectoria**: *¿el agente exploró con método?*
 (Usamos los términos con precisión: la **trayectoria** es la secuencia de
-decisiones —el concepto—; el **trace** es su registro instrumentado —el
-artefacto— que el judge lee.) La elegimos así deliberadamente: si el agente
+decisiones (el concepto); el **trace** es su registro instrumentado (el
+artefacto) que el judge lee.) La elegimos así deliberadamente: si el agente
 **abrió la puerta**, eso ya lo verifica `check_goal` **por código**, y la regla
 de la clase es **no usar un judge donde hay verificación programática**. El judge
 aporta donde no la hay: en *cómo* se comportó en el camino (look al entrar,
@@ -212,7 +212,7 @@ allá del éxito binario.
 - **Cómo.** El judge puntúa la trayectoria con una rúbrica explícita
   ([`eval/judge.py`](eval/judge.py)), sobre la **traza real de tool-calls** (no
   sobre el output final, que muchas veces no llega). Devuelve el puntaje **y su
-  justificación** —CoT que hace el veredicto auditable—. Es *pointwise* (puntúa
+  justificación** (CoT que hace el veredicto auditable). Es *pointwise* (puntúa
   una trayectoria), lo apropiado para **monitorear** (la clase reserva *pairwise*
   para *elegir* entre candidatas).
 - **Cuándo NO usar el judge.** Seguimos la regla de la clase: *"empujá todo lo
@@ -224,8 +224,8 @@ allá del éxito binario.
   que calibrarlo contra ground truth."* Comparamos las trazas del golden set
   contra una **referencia determinística** (`reference_verdict`, derivada de la
   traza) y medimos el **kappa de Cohen** (`cohen_kappa`), que corrige el acuerdo
-  por azar —un judge que siempre dice lo mismo puede tener 95% de accuracy y
-  κ = 0—. Bandas: κ < 0.4 recalibrar, 0.4–0.6 tolerable, 0.6–0.8 trabajable. Si el
+  por azar (un judge que siempre dice lo mismo puede tener 95% de accuracy y
+  κ = 0). Bandas: κ < 0.4 recalibrar, 0.4–0.6 tolerable, 0.6–0.8 trabajable. Si el
   kappa es bajo, no usamos sus números aunque el judge ya esté construido (es lo
   que pasó: κ ≈ 0, §3.4).
 

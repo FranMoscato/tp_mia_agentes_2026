@@ -933,8 +933,7 @@ esconde la forma: el gate no mejora parejo, **rescata un escenario puntual**
   react,react_generico`. En `cases.jsonl` cada caso registra qué prompt usó en el
   campo `prompt_version` (**`escape-v1`** = especializado; **`generico-v1`** =
   genérico). Ambos brazos son idénticos salvo el prompt, y en la corrida canónica
-  van los **8 escenarios × 3 repeats** (la versión anterior de este experimento
-  fue acotada a 4 escenarios y `repeats 1` para no colgar el proveedor local).
+  van los **8 escenarios × 3 repeats** .
 - **Hipótesis.** `escape-v1` está lleno de reglas anti-prosa ("emití `tool_calls`,
   no texto"), así que debería **reducir** `prosa_en_vez_de_tool`, el modo dominante.
 - **Qué miramos.** Perfil de fallo (prosa vs. otros), cantidad de tool-calls,

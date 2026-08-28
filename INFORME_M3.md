@@ -663,7 +663,7 @@ correctamente pero se queda sin iteraciones o entra en loop—, y **recién ahí
 experimentos del §4 miden el framework y no el modelo**. Era exactamente la
 condición que este informe necesitaba para poder concluir algo.
 
-**Hallazgo 2 — el orden de los brazos depende del modelo.** Es el resultado más
+**Hallazgo 2 — el orden de los brazos segun accuracy depende del modelo.** Es el resultado más
 interesante de la comparación cross-modelo, y un solo modelo lo habría ocultado:
 
 ```

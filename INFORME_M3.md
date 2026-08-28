@@ -1129,7 +1129,7 @@ esconde la forma: el gate no mejora parejo, **rescata un escenario puntual**
 
 **Qué construiríamos a continuación.**
 
-> **➡️ Próximo paso inmediato: atacar la CONSISTENCIA, no la capacidad.** El
+> ** Próximo paso inmediato: atacar la CONSISTENCIA, no la capacidad.** El
 > agente ya resuelve los 8 escenarios en algún intento (`pass@k` = 1.0) pero solo
 > 5 de 8 en los tres (`pass^k` = 0.625), y subir de modelo ya no mueve la aguja
 > (§3.5). Todo lo que sigue apunta a cerrar esa brecha.
@@ -1148,15 +1148,14 @@ esconde la forma: el gate no mejora parejo, **rescata un escenario puntual**
    repite y el resumen siguiente vuelve a omitirlo. La corrección natural es que
    el `GameState` incluya explícitamente **qué se intentó y con qué resultado**
    —no solo el estado alcanzado— para que repetir sea visible desde el propio
-   resumen. El "summarizer selectivo" que proponíamos antes atacaba el síntoma
-   (costo) y no la causa.
+   resumen. 
 
 2. **Separar los dos problemas del judge, que ya sabemos que son distintos.**
    Endurecimos `acciones_apoyadas` (de 0.96 a 0.75 de tasa de "sí") y su κ
    **siguió en cero** (§3.4): ahí el problema no es la referencia sino que el
    judge no acuerda. Queda por decidir si se rediseña la rúbrica de ese criterio
-   o se lo saca del judge y se lo deja enteramente en código —que es lo que la
-   clase recomienda cuando hay verificación programática disponible—. En
+   o se lo saca del judge y se lo deja enteramente en código (que es lo que
+   recomendable cuando hay verificación programática disponible). En
    `exploracion_ordenada`, en cambio, la referencia **sí** satura (0.97) y el
    arreglo es el mismo endurecimiento que ya aplicamos al otro criterio.
 

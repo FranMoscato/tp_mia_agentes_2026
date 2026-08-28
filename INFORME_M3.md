@@ -168,8 +168,7 @@ De ahí tres decisiones que fundamentan lo que sigue: (1) reportamos un **vector
 de dimensiones**, no un score único, porque *"la calidad no es un escalar"* y *"un
 score único es cómodo para un dashboard y desastroso para diagnosticar"*; (2) las
 restricciones **duras** (el goal, verificado por `check_goal`) son un **gate
-binario**, no un término de un promedio ponderado *("las duras son un gate, no un
-término de una suma")*; (3) como *"una corrida es una anécdota, no una medición"*,
+binario**, no un término de un promedio ponderado; (3) como *"una corrida es una anécdota, no una medición"*,
 cada métrica viaja con su dispersión (pass^k, IC de Wilson, repeats).
 
 ### 2.1 Cuantitativas
@@ -177,7 +176,7 @@ cada métrica viaja con su dispersión (pass^k, IC de Wilson, repeats).
 | Métrica | Qué mide | Por qué la elegimos |
 |---|---|---|
 | **Accuracy** (con **IC de Wilson 95%**) | Fracción de casos resueltos | Es la medida directa de éxito. Reportamos el intervalo de Wilson porque *"una corrida no es una medición"*: con 8 escenarios y pocos repeats, el intervalo es más honesto que un puntaje pelado (y Wilson se porta mejor que la normal cerca de 0/1). |
-| **pass@k / pass^k** | pass@k: resolver en **al menos uno** de k intentos (capacidad). pass^k: resolverlo en **todos** (confiabilidad) | Los reportamos **juntos** porque la brecha entre ambos **es** la varianza (*"puede resolverlo"* vs. *"lo resuelve siempre"*). Para un agente que actúa **sin supervisión** manda pass^k (τ-bench); pass@k (de HumanEval) sería la métrica correcta solo si un humano pudiera reintentar/elegir —que no es nuestro caso—. |
+| **pass@k / pass^k** | pass@k: resolver en **al menos uno** de k intentos (capacidad). pass^k: resolverlo en **todos** (confiabilidad) | Los reportamos **juntos** porque la brecha entre ambos **es** la varianza (*"puede resolverlo"* vs. *"lo resuelve siempre"*). Para un agente que actúa **sin supervisión** manda pass^k (τ-bench); pass@k (de HumanEval) sería la métrica correcta solo si un humano pudiera reintentar/elegir entre todos los intentos. |
 | **Overhead vs. óptimo** | `tool_calls / óptimo`, sobre los resueltos | Mide **eficiencia**: cuánto se aleja del camino ideal. El óptimo **no se hardcodea**: se **deriva por BFS** sobre el grafo de estados ([`eval/optimal.py`](eval/optimal.py)), y coincide con el enunciado en los 8/8 escenarios (cross-validación). |
 | **Tokens por caso resuelto** | Tokens totales (incl. fallidos) / resueltos | El costo relevante es *"cuánto cuesta un éxito"*, no el promedio por corrida: un agente que falla barato no es más barato si nunca resuelve. Lo medimos en **tokens** (moneda independiente del proveedor) porque con Ollama el costo en USD es $0; el USD es un derivado directo que se "enciende" solo al correr con un proveedor pago (Bedrock). Separamos tokens de **agente** vs. **summarizer**. |
 | **Latencia p50 / p95** | Percentiles de wall-clock por caso | La clase es explícita: *"nunca promedio"*. Los percentiles muestran la cola (p95), que es donde vive la mala experiencia. |
@@ -202,8 +201,8 @@ el enunciado en los 8/8 escenarios, así que la métrica queda cross-validada.
 
 La dimensión es **calidad de la trayectoria**: *¿el agente exploró con método?*
 (Usamos los términos con precisión: la **trayectoria** es la secuencia de
-decisiones —el concepto—; el **trace** es su registro instrumentado —el
-artefacto— que el judge lee.) La elegimos así deliberadamente: si el agente
+decisiones (el concepto); el **trace** es su registro instrumentado (el
+artefacto) que el judge lee.) La elegimos así deliberadamente: si el agente
 **abrió la puerta**, eso ya lo verifica `check_goal` **por código**, y la regla
 de la clase es **no usar un judge donde hay verificación programática**. El judge
 aporta donde no la hay: en *cómo* se comportó en el camino (look al entrar,
@@ -213,7 +212,7 @@ allá del éxito binario.
 - **Cómo.** El judge puntúa la trayectoria con una rúbrica explícita
   ([`eval/judge.py`](eval/judge.py)), sobre la **traza real de tool-calls** (no
   sobre el output final, que muchas veces no llega). Devuelve el puntaje **y su
-  justificación** —CoT que hace el veredicto auditable—. Es *pointwise* (puntúa
+  justificación** (CoT que hace el veredicto auditable). Es *pointwise* (puntúa
   una trayectoria), lo apropiado para **monitorear** (la clase reserva *pairwise*
   para *elegir* entre candidatas).
 - **Cuándo NO usar el judge.** Seguimos la regla de la clase: *"empujá todo lo
@@ -225,8 +224,8 @@ allá del éxito binario.
   que calibrarlo contra ground truth."* Comparamos las trazas del golden set
   contra una **referencia determinística** (`reference_verdict`, derivada de la
   traza) y medimos el **kappa de Cohen** (`cohen_kappa`), que corrige el acuerdo
-  por azar —un judge que siempre dice lo mismo puede tener 95% de accuracy y
-  κ = 0—. Bandas: κ < 0.4 recalibrar, 0.4–0.6 tolerable, 0.6–0.8 trabajable. Si el
+  por azar (un judge que siempre dice lo mismo puede tener 95% de accuracy y
+  κ = 0). Bandas: κ < 0.4 recalibrar, 0.4–0.6 tolerable, 0.6–0.8 trabajable. Si el
   kappa es bajo, no usamos sus números aunque el judge ya esté construido (es lo
   que pasó con dos de los tres criterios, §3.4).
 
@@ -235,44 +234,20 @@ allá del éxito binario.
 Todo sale de `python eval/run.py` sin pasos manuales. Cada corrida escribe
 `cases.jsonl` (traza por caso), `summary.json` y `summary.md`, y **versiona** en
 el meta: modelo (`BEDROCK_MODEL_ID`), cuenta/perfil AWS, versión de prompt y
-commit de git —sin esto, dos corridas de distintas máquinas serían
-indistinguibles. El núcleo de métricas, la búsqueda del óptimo, el judge y los
-contrastes estadísticos están **testeados sin LLM**
+commit de git (sin esto, dos corridas de distintas máquinas serían
+indistinguibles). El núcleo de métricas, la búsqueda del óptimo, el judge y los
+contrastes estadísticos tienen sus test individuales.
 ([`tests/test_eval_harness.py`](tests/test_eval_harness.py),
 [`tests/test_judge.py`](tests/test_judge.py),
 [`tests/test_eval_stats.py`](tests/test_eval_stats.py)).
 
-**Cómo comparamos dos brazos (y por qué no alcanza con juntar todo).**
-
-Supongamos que queremos saber si `gate` es mejor que `react`. Lo intuitivo es
-juntar los 32 casos de cada uno y comparar los dos porcentajes. **Eso pierde
-información**, porque los dos brazos corrieron **los mismos 8 escenarios**, y los
-escenarios son muy distintos entre sí: en `study-with-key` casi todo sale bien
-(accuracy ~1.00) y en `backtracking-vault` casi nada (~0.14). Al mezclarlos, esa
-diferencia *entre escenarios* —que no tiene nada que ver con el brazo— se suma al
-ruido y tapa la diferencia que sí queremos ver.
-
-La solución es **comparar dentro de cada escenario y después combinar**. A cada
-escenario lo llamamos un **estrato**: comparamos `react` vs. `gate` en
-`study-with-key`, después en `color-locks`, y así con los ocho; recién al final
-se juntan los ocho resultados en un solo número. Ese es el test de
-**Cochran–Mantel–Haenszel** ([`eval/stats.py`](eval/stats.py)).
-
-Dos consecuencias prácticas:
-
-- **Un escenario donde los dos brazos dan lo mismo no aporta nada** y queda
-  afuera. Con `nova-micro`, `backtracking-vault` y `vault-combination` dan 0/8 en
-  ambos: no hay nada que comparar ahí. Por eso el informe siempre dice **sobre
-  cuántos estratos** se calculó cada p-valor: uno sobre 4 de 8 escenarios es más
-  débil que uno sobre 8.
-- **Cambia conclusiones.** En el Experimento 2, juntar todo da p = 0.0957 (no
-  concluyente) y estratificar da p = 0.0338 (significativo), **con exactamente
-  los mismos 128 casos**. Por eso reportamos los dos números y no solo el que
-  nos conviene.
-
-Se genera con `python eval/comparar_brazos.py <cases.jsonl>`, que además imprime
-el efecto **escenario por escenario** — porque el promedio esconde la forma: el
-gate no mejora parejo, rescata un escenario puntual (§4.2).
+**Contrastes entre brazos.** Como los brazos corren los mismos escenarios, el
+diseño es de **bloques** y el test correcto estratifica por escenario
+(Cochran–Mantel–Haenszel, [`eval/stats.py`](eval/stats.py)); el agrupado mete la
+varianza entre escenarios en el error estándar y tapa efectos reales (§4).
+`python eval/comparar_brazos.py <cases.jsonl>` reporta **ambos** p-valores, el
+efecto escenario por escenario, y **cuántos estratos se descartaron** por no
+tener varianza (un p-valor sobre 4 de 8 estratos no es lo mismo que sobre 8).
 
 ---
 
@@ -344,7 +319,7 @@ escenario), así que no hay riesgo real de overfitting.
 
 Con `nova-lite` el split da **dev 35/48 (0.729)** contra **holdout 24/48
 (0.500)**. La brecha existe, pero **desglosada por dificultad no es
-overfitting** —es lo contrario—:
+overfitting** (es lo contrario):
 
 | Dificultad | dev | holdout |
 |---|---:|---:|
@@ -371,7 +346,7 @@ del diseño del split, no una señal de sobreajuste.
 tienen dos orígenes: *deductivo* (a priori, del dominio) e *inductivo* (a
 posteriori, de mirar salidas reales). Arrancamos con categorías genéricas
 razonables (`crash`, `exhausted_iterations`, `tool_errors`…), pero la categoría
-que domina —`prosa_en_vez_de_tool`, con sus variantes— **no se podía imaginar de
+que domina (`prosa_en_vez_de_tool`) **no se podía imaginar de
 antemano**: salió de mirar los traces. Es la advertencia de la clase: *"si
 empezás con categorías, vas a encontrar solo lo que ya sabías"*. Por eso las
 categorías que reportamos están **definidas y verificadas mirando trazas**, no a
@@ -391,16 +366,16 @@ Sobre 24 casos por config (8 escenarios × 3 repeats), con `nova-lite`:
 | `summarizer` | 9 | 3 | **9** | 1 | **2** |
 
 **El modo de fallo dominante cambió de naturaleza al cambiar el modelo.** Con
-`qwen2.5:3b` era `prosa_en_vez_de_tool` —el agente describía la acción en vez de
-emitirla, y el loop se cerraba antes de actuar—. Con `nova-lite` ese modo
+`qwen2.5:3b` era `prosa_en_vez_de_tool` (el agente describía la acción en vez de
+emitirla, y el loop se cerraba antes de actuar). Con `nova-lite` ese modo
 **prácticamente desaparece**: 0 casos en `react`, 2 en `react_generico`, 1 en
 `summarizer`.
 
 Eso es un resultado, no una nota al pie. `prosa_en_vez_de_tool` es un fallo del
 **protocolo**: en términos de la Clase 3, el modelo devuelve texto
 (`stopReason = end_turn`) donde debía emitir un `toolUse`. Ese fallo **no dice
-nada sobre el diseño del agente** —el motor de tool-use de M1 está bien, el
-modelo chico no lo acciona—. Los modos que quedan sí hablan del diseño:
+nada sobre el diseño del agente** (el motor de tool-use de M1 está bien, el
+modelo chico no lo acciona). Los modos que quedan sí hablan del diseño:
 
 - **`exhausted_iterations`** (3 a 7 por brazo): el agente actúa correctamente
   pero no le alcanzan las 30 iteraciones. Es un fallo de **eficiencia de
@@ -422,7 +397,7 @@ máxima de tool-calls idénticas consecutivas es la medida directa:
 Veintitrés llamadas idénticas seguidas. Re-inyectar un estado resumido en cada
 turno **no ancla al agente, lo encierra**: si el resumen omite o deforma el
 efecto de la última acción, el agente vuelve a intentarla, y el resumen siguiente
-—derivado de esa misma interacción— vuelve a omitirla. El §4.1 cierra el
+(derivado de esa misma interacción) vuelve a omitirla. El §4.1 cierra el
 argumento con el contraste estadístico.
 
 ![Redundancia: racha máxima de tool-calls repetidas](docs/m3_redundancia.png)
@@ -438,8 +413,8 @@ priorizar por frecuencia esconde los modos raros pero caros. Lo computamos
 | `crash` | 2 | **132.8 s** | 265,6 s |
 | `prosa_en_vez_de_tool` | 3 | 40.4 s | 121,1 s |
 
-*(`success` aparece en el JSON con 59 casos y 1.460,5 s: no es un fallo, pero
-sirve de referencia —los loops solos cuestan más tiempo que todos los éxitos
+*`success` aparece en el JSON con 59 casos y 1.460,5 s: no es un fallo, pero
+sirve de referencia (los loops solos cuestan más tiempo que todos los éxitos
 juntos.)*
 
 Por **frecuencia** el modo dominante es `exhausted_iterations` (20 vs. 12). Pero
@@ -451,8 +426,8 @@ loops —y el §3.3 ya mostró quién los produce: el `summarizer`, con 9 de los
 Vale notar que **esta priorización se dio vuelta respecto de la corrida local**.
 Con `qwen2.5:3b` el modo más frecuente era `prosa_en_vez_de_tool` (67 casos) y
 los loops eran raros pero caros (3 casos, 155 s cada uno). Ahora la prosa cayó a
-3 casos y los loops se cuadruplicaron. La conclusión metodológica —priorizar por
-frecuencia × costo, no por frecuencia— **sobrevivió al cambio de modelo**; la
+3 casos y los loops se cuadruplicaron. La conclusión metodológica (priorizar por
+frecuencia × costo, no por frecuencia) **sobrevivió al cambio de modelo**; la
 lista concreta de prioridades, no.
 
 ### 3.4 Resultados cualitativos (LLM-as-judge)
@@ -486,8 +461,7 @@ contra 0.58–0.62 del resto. Es la misma señal que la racha de 23 tool-calls
 repetidas del §3.3, medida por una vía independiente.
 
 **Meta-eval: ¿es confiable el judge? (kappa).** Corrimos la meta-eval del
-enunciado sobre el golden set (8 trazas reales del piloto `nova-lite`,
-[`eval/golden/`](eval/golden/)): comparamos el veredicto del judge contra una
+enunciado sobre el golden set: comparamos el veredicto del judge contra una
 **referencia determinística** derivada de propiedades objetivas de la traza
 —orden `look`/`examine` antes de actuar, `tool_error_count`, repeticiones—
 (`reference_verdict` en [`eval/judge.py`](eval/judge.py)), con la **kappa de
@@ -496,11 +470,10 @@ mismo LLM): evita la circularidad, y es uno de los **dos golden sets** que
 distingue la clase —el *del judge* (output + etiqueta), no el *del agente*
 (tarea + comportamiento esperado)—.
 
-Con el judge fuerte, sobre las 96 trazas de la corrida canónica (59 éxitos y 37
-fallos, o sea **con variación real**, a diferencia de las 8 trazas fallidas del
-piloto):
+Con el judge, sobre las 96 trazas de la corrida canónica (59 éxitos y 37
+fallos) obtuvimos los siguientes resultados.
 
-**Tabla A — primera medición** (referencia original):
+**Tabla A — primera medición**, con la referencia original:
 
 | Criterio | acuerdo bruto | **κ** | ref dice "sí" | judge dice "sí" |
 |---|---:|---:|---:|---:|
@@ -508,13 +481,10 @@ piloto):
 | `exploracion_ordenada` | 0.85 | 0.26 | **0.97** | 0.82 |
 | `acciones_apoyadas` | 0.73 | **0.00** | **0.96** | 0.75 |
 
-**Acá cambia la conclusión que traía este informe.** La versión anterior
-atribuía la kappa baja a que *el judge chico no era confiable*. Con un judge
-fuerte, distinto del agente y sobre trazas con variación, **ninguno de los tres
-criterios llega a la banda trabajable (0.6–0.8)**: dan **0.26**, **−0.056** y
-**0.55** (tabla arriba). Así que el judge no era (solo) el problema.
+Encontrándonos con un problema: **ninguno de los tres criterios llega a la
+banda trabajable (0.6–0.8)**. Dan **0.55**, **0.26** y **0.00**.
 
-**Y lo pusimos a prueba.** La hipótesis inmediata fue que el culpable era la
+La hipótesis inmediata fue que el culpable era la
 **referencia saturada**, así que endurecimos `acciones_apoyadas`: además de
 exigir cero tool-errors, ahora exige que todo `use(item=X)` venga después de un
 `take(item=X)` exitoso —la misma garantía que el gate impone por código (§4.2),
@@ -522,7 +492,8 @@ o sea una propiedad del dominio y no un umbral elegido para mover el número—.
 tasa de "sí" bajó de **0.96 a 0.75**: la referencia pasó a discriminar.
 
 **Tabla B — segunda medición**, tras endurecer `acciones_apoyadas`. Es la única
-fila que cambia respecto de la Tabla A; las otras dos están para comparar:
+fila que cambia respecto de la Tabla A (se muestran los dos valores); las otras
+dos están para comparar:
 
 | Criterio | ref dice "sí" | judge dice "sí" | κ |
 |---|---:|---:|---:|
@@ -532,7 +503,7 @@ fila que cambia respecto de la Tabla A; las otras dos están para comparar:
 
 **La hipótesis se refutó a medias, y eso es más informativo que si hubiera
 funcionado.** Con la referencia ya discriminando, la kappa de `acciones_apoyadas`
-**siguió en cero**. Fijate que ambas partes reparten en la misma proporción
+**siguió en cero**. Ambas partes reparten en la misma proporción
 (0.75 y 0.75) pero κ = −0.056: coinciden en *cuántos* casos marcan, y no en
 *cuáles*. Es acuerdo al nivel del azar.
 
@@ -604,11 +575,11 @@ es evaluable de forma confiable por LLM y dejarlo enteramente en código.
 **Aplicamos el rediseño de la clase (4.4) — y falló de una forma reveladora.** La
 clase recomienda **una llamada por criterio** + few-shot + **razonar antes de
 decidir**. Lo implementamos (`--per-criterion` en [`eval/judge.py`](eval/judge.py))
-y con el judge local (`llama3.2`) la **cobertura se derrumbó a 0/8**: pedirle
+y con el judge local (`llama3.2`) la **cobertura se derrumbó a 0**: pedirle
 *razonar antes* lo hace responder en **prosa** en vez de llamar la tool
-`final_result` —el mismísimo `prosa_en_vez_de_tool` que el judge existe para
-detectar (§3.3)—, y triplicar las llamadas multiplica la exposición a esa falla.
-La lección es la premisa que la clase da por sentada y nosotros no teníamos: el
+`final_result` (el mismísimo `prosa_en_vez_de_tool` que el judge existe para
+detectar (§3.3)), y triplicar las llamadas multiplica la exposición a esa falla.
+La lección es la premisa que la clase da por sentada: el
 judge debe correr **con un modelo capaz**; con un modelo chico, el diseño
 teóricamente mejor es en la práctica **peor**.
 
@@ -617,23 +588,10 @@ cierra el argumento: el problema era la capacidad del judge para emitir el
 veredicto estructurado, no el diseño de la rúbrica. Mantenemos single-call como
 modo por defecto porque es más barato y ya da cobertura total.
 
-**Nota operativa (nos costó una tanda de corridas).** El model id del judge debe
-ser `amazon.nova-pro-v1:0`, **sin** el prefijo `us.`. El id con prefijo es un
-*inference profile* cross-region que puede rutear a `us-west-2`, y la SCP de la
-organización del sandbox lo bloquea con un deny explícito
-(`AccessDeniedException`). Peor: [`eval/judge.py`](eval/judge.py) captura la
-excepción por caso y devuelve `None`, así que el fallo se reporta como `n: 0` con
-exit code 0 —indistinguible de "el judge no pudo puntuar estas trazas"—. Hubo que
-reproducir la llamada a mano para verlo.
-
-*Caveats y una contaminación honesta.* (1) La saturación de la referencia, ya
-desarrollada arriba: en `exploracion_ordenada` marca "sí" en el 97 % de los casos
-y por eso su κ = 0.26 no se puede leer como "el judge falla" —el acuerdo esperado
-por azar ya es altísimo—. (2)
-**Entrenar para el examen:** el `ESCAPE_ROOM_SYSTEM_PROMPT` le *ordena* al agente
+*Caveats y una contaminación honesta.* (1) **Entrenar para el examen:** el `ESCAPE_ROOM_SYSTEM_PROMPT` le *ordena* al agente
 explorar en orden (`look`→`examine`→…), que es justo lo que el criterio
-`exploracion_ordenada` puntúa —pasar una dimensión blanda al prompt del agente es,
-en términos de la clase, *entrenar para el examen*; lo declaramos como límite—. (3)
+`exploracion_ordenada` puntúa (pasar una dimensión blanda al prompt del agente es,
+en términos de la clase, *entrenar para el examen*; lo declaramos como límite). (2)
 El self-preference **sí lo medimos** (arriba): +0.41 sobre 3, y mayor donde peor
 rinde el brazo. Reproducible: `python eval/kappa.py eval/golden/cases.jsonl`, y
 para el sesgo, correr `eval/judge.py` sobre las mismas trazas con
@@ -710,7 +668,7 @@ correctamente pero se queda sin iteraciones o entra en loop—, y **recién ahí
 experimentos del §4 miden el framework y no el modelo**. Era exactamente la
 condición que este informe necesitaba para poder concluir algo.
 
-**Hallazgo 2 — el orden de los brazos depende del modelo.** Es el resultado más
+**Hallazgo 2 — el orden de los brazos segun accuracy depende del modelo.** Es el resultado más
 interesante de la comparación cross-modelo, y un solo modelo lo habría ocultado:
 
 ```
@@ -1101,7 +1059,7 @@ esconde la forma: el gate no mejora parejo, **rescata un escenario puntual**
   determinística. *Lo que queda* como limitación honesta:
 
   (a) **La referencia, no el judge.** Con `nova-pro` —fuerte, distinto del agente,
-  sobre 96 trazas con variación real— **ninguno de los tres criterios llega a
+  sobre 96 trazas con variación real) **ninguno de los tres criterios llega a
   la banda trabajable**: 0.26, −0.056 y 0.55. El diagnóstico anterior ("el
   judge chico no es confiable") era
   incompleto: nuestra `reference_verdict` marca "sí" en el **96–97 %** de los

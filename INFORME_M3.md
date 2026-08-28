@@ -168,8 +168,7 @@ De ahí tres decisiones que fundamentan lo que sigue: (1) reportamos un **vector
 de dimensiones**, no un score único, porque *"la calidad no es un escalar"* y *"un
 score único es cómodo para un dashboard y desastroso para diagnosticar"*; (2) las
 restricciones **duras** (el goal, verificado por `check_goal`) son un **gate
-binario**, no un término de un promedio ponderado *("las duras son un gate, no un
-término de una suma")*; (3) como *"una corrida es una anécdota, no una medición"*,
+binario**, no un término de un promedio ponderado; (3) como *"una corrida es una anécdota, no una medición"*,
 cada métrica viaja con su dispersión (pass^k, IC de Wilson, repeats).
 
 ### 2.1 Cuantitativas
@@ -177,7 +176,7 @@ cada métrica viaja con su dispersión (pass^k, IC de Wilson, repeats).
 | Métrica | Qué mide | Por qué la elegimos |
 |---|---|---|
 | **Accuracy** (con **IC de Wilson 95%**) | Fracción de casos resueltos | Es la medida directa de éxito. Reportamos el intervalo de Wilson porque *"una corrida no es una medición"*: con 8 escenarios y pocos repeats, el intervalo es más honesto que un puntaje pelado (y Wilson se porta mejor que la normal cerca de 0/1). |
-| **pass@k / pass^k** | pass@k: resolver en **al menos uno** de k intentos (capacidad). pass^k: resolverlo en **todos** (confiabilidad) | Los reportamos **juntos** porque la brecha entre ambos **es** la varianza (*"puede resolverlo"* vs. *"lo resuelve siempre"*). Para un agente que actúa **sin supervisión** manda pass^k (τ-bench); pass@k (de HumanEval) sería la métrica correcta solo si un humano pudiera reintentar/elegir —que no es nuestro caso—. |
+| **pass@k / pass^k** | pass@k: resolver en **al menos uno** de k intentos (capacidad). pass^k: resolverlo en **todos** (confiabilidad) | Los reportamos **juntos** porque la brecha entre ambos **es** la varianza (*"puede resolverlo"* vs. *"lo resuelve siempre"*). Para un agente que actúa **sin supervisión** manda pass^k (τ-bench); pass@k (de HumanEval) sería la métrica correcta solo si un humano pudiera reintentar/elegir entre todos los intentos. |
 | **Overhead vs. óptimo** | `tool_calls / óptimo`, sobre los resueltos | Mide **eficiencia**: cuánto se aleja del camino ideal. El óptimo **no se hardcodea**: se **deriva por BFS** sobre el grafo de estados ([`eval/optimal.py`](eval/optimal.py)), y coincide con el enunciado en los 8/8 escenarios (cross-validación). |
 | **Tokens por caso resuelto** | Tokens totales (incl. fallidos) / resueltos | El costo relevante es *"cuánto cuesta un éxito"*, no el promedio por corrida: un agente que falla barato no es más barato si nunca resuelve. Lo medimos en **tokens** (moneda independiente del proveedor) porque con Ollama el costo en USD es $0; el USD es un derivado directo que se "enciende" solo al correr con un proveedor pago (Bedrock). Separamos tokens de **agente** vs. **summarizer**. |
 | **Latencia p50 / p95** | Percentiles de wall-clock por caso | La clase es explícita: *"nunca promedio"*. Los percentiles muestran la cola (p95), que es donde vive la mala experiencia. |

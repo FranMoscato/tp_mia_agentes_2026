@@ -221,9 +221,9 @@ allá del éxito binario.
   que **no** lo juzga el LLM; el judge solo cubre la calidad de exploración, donde
   no hay verificación por código.
 - **Confiabilidad (meta-eval).** *"Un judge es un instrumento, no un oráculo: hay
-  que calibrarlo contra ground truth."* Comparamos las trazas del golden set
-  contra una **referencia determinística** (`reference_verdict`, derivada de la
-  traza) y medimos el **kappa de Cohen** (`cohen_kappa`), que corrige el acuerdo
+  que calibrarlo contra ground truth."* Comparamos las trazas de la corrida
+  canónica contra una **referencia determinística** (`reference_verdict`,
+  derivada de la traza) y medimos el **kappa de Cohen** (`cohen_kappa`), que corrige el acuerdo
   por azar (un judge que siempre dice lo mismo puede tener 95% de accuracy y
   κ = 0). Bandas: κ < 0.4 recalibrar, 0.4–0.6 tolerable, 0.6–0.8 trabajable. Si el
   kappa es bajo, no usamos sus números aunque el judge ya esté construido (es lo
@@ -484,18 +484,21 @@ Donde el judge es tajante es en el `summarizer`: **0.21 en "sin redundancia"**
 contra 0.58–0.62 del resto. Es la misma señal que la racha de 23 tool-calls
 repetidas del §3.3, medida por una vía independiente.
 
-**Meta-eval: ¿es confiable el judge? (kappa).** Corrimos la meta-eval del
-enunciado sobre el golden set: comparamos el veredicto del judge contra una
-**referencia determinística** derivada de propiedades objetivas de la traza
-—orden `look`/`examine` antes de actuar, `tool_error_count`, repeticiones—
-(`reference_verdict` en [`eval/judge.py`](eval/judge.py)), con la **kappa de
-Cohen** por criterio. La referencia es código (no otro juicio subjetivo ni el
-mismo LLM): evita la circularidad, y es uno de los **dos golden sets** que
-distingue la clase —el *del judge* (output + etiqueta), no el *del agente*
-(tarea + comportamiento esperado)—.
+**Meta-eval: ¿es confiable el judge? (kappa).** Un judge que puntúa no sirve de
+nada si no sabemos si acierta. Para medirlo comparamos su veredicto contra una
+**referencia determinística**: código que decide los mismos tres criterios desde
+propiedades objetivas de la traza (orden `look`/`examine` antes de actuar,
+`tool_error_count`, repeticiones), en `reference_verdict`
+([`eval/judge.py`](eval/judge.py)). Que la referencia sea **código** y no otro
+LLM ni un juicio a ojo es lo que evita la circularidad. Es uno de los **dos
+golden sets** que distingue la clase: el *del judge* (output + etiqueta), no el
+*del agente* (tarea + comportamiento esperado).
 
-Con el judge, sobre las 96 trazas de la corrida canónica (59 éxitos y 37
-fallos) obtuvimos los siguientes resultados.
+La medida es la **kappa de Cohen** por criterio, que corrige el acuerdo por azar.
+La corrimos sobre **las 96 trazas de la corrida canónica** —59 éxitos y 37
+fallos, o sea con variación real— y no sobre el golden set de 8 casos del piloto,
+que estaba compuesto solo por trazas fallidas y no permitía distinguir nada.
+Resultados en `kappa_summary.json` de esa corrida.
 
 **Tabla A — primera medición**, con la referencia original:
 
@@ -617,10 +620,19 @@ explorar en orden (`look`→`examine`→…), que es justo lo que el criterio
 `exploracion_ordenada` puntúa (pasar una dimensión blanda al prompt del agente es,
 en términos de la clase, *entrenar para el examen*; lo declaramos como límite). (2)
 El self-preference **sí lo medimos** (arriba): +0.41 sobre 3, y mayor donde peor
-rinde el brazo. Reproducible: `python eval/kappa.py eval/golden/cases.jsonl`, y
-para el sesgo, correr `eval/judge.py` sobre las mismas trazas con
-`--judge-model amazon.nova-lite-v1:0` y comparar contra `judged.jsonl`
-(guardado como `judged_self.jsonl` en la corrida canónica).
+rinde el brazo.
+
+Reproducible sobre la corrida canónica:
+
+```bash
+python eval/kappa.py eval/results/20260825-204157/cases.jsonl
+# el sesgo: el mismo judge.py con el modelo del AGENTE, y comparar
+python eval/judge.py eval/results/20260825-204157/cases.jsonl \
+  --judge-provider bedrock --judge-model amazon.nova-lite-v1:0
+```
+
+Los veredictos del judge propio quedan versionados como `judged_self.jsonl`
+junto a los del ajeno (`judged.jsonl`) en esa corrida.
 
 ### 3.5 Comparación cross-modelo / proveedor
 

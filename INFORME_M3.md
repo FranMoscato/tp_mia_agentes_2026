@@ -1219,42 +1219,16 @@ Pasar de 3.2B a 8.0B **rompe el cero**: `gate` va de 0/24 a 4/24, **p = 0.037**
 (significativo); `react` de 0/24 a 3/24, p = 0.074 (no alcanza). Como la familia
 y la cuantización quedan fijas, **el efecto es atribuible al tamaño**.
 
-Qué autoriza a decir y qué no. Autoriza: *el tamaño del modelo contribuye al
+¿Qué autoriza a decir y qué no?
+
+Autoriza: *el tamaño del modelo contribuye al
 techo*, y por lo tanto el 0/24 de los modelos chicos **no era solo degradación
-por cuantizar a 4 bits**. No autoriza: atribuir al tamaño toda la brecha hasta
+por cuantizar a 4 bits**. 
+
+No autoriza: atribuir al tamaño toda la brecha hasta
 `nova-lite` (0.792) — entre el 8B local y Nova siguen cambiando familia,
 entrenamiento y API a la vez. Lo que queda del confound es más chico y está
 acotado.
-
-Falta el peldaño de arriba para cerrar la curva local:
-
-| Modelo | Parámetros | Estado |
-|---|---:|---|
-| `qwen2.5:3b` | 3.1B | ya corrida (0/24) |
-| `qwen2.5:7b` | 7B | pendiente |
-| `qwen2.5:14b` | 14B | pendiente (según RAM disponible) |
-
-La familia `qwen` replicaría el peldaño en un entrenamiento distinto: si 3B→7B
-mueve la aguja como 3.2B→8.0B lo hizo en `llama`, el efecto del tamaño deja de
-depender de una sola familia.
-
-```bash
-ollama pull qwen2.5:7b
-OLLAMA_HOST=http://localhost:11434 OLLAMA_MODEL=qwen2.5:7b \
-  python eval/run.py --repeats 3
-```
-
-**Control de cuantización** (tamaño constante en 3B): correr `qwen2.5:3b` sin
-cuantizar contra el mismo modelo en Q4_K_M. Separa "el modelo es chico" de "lo
-comprimimos a 4 bits".
-
-Las corridas se suman solas a la comparación cross-modelo: `summary.json`
-versiona `provider`/`model` en su meta y `scripts/comparar_modelos_m3.py`
-agrupa por esa clave (§3.5).
-
-**Reparto del trabajo.** La escalera A requiere lease de AWS. La B y el control
-de cuantización corren **local y sin lease**, así que avanzan en paralelo; los
-toma **Franco**, que tiene la máquina capaz de correr los modelos de 7B y 14B.
 
 ---
 

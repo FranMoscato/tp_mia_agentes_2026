@@ -236,7 +236,7 @@ Todo sale de `python eval/run.py` sin pasos manuales. Cada corrida escribe
 el meta: modelo (`BEDROCK_MODEL_ID`), cuenta/perfil AWS, versión de prompt y
 commit de git (sin esto, dos corridas de distintas máquinas serían
 indistinguibles). El núcleo de métricas, la búsqueda del óptimo, el judge y los
-contrastes estadísticos están **testeados sin LLM**
+contrastes estadísticos tienen sus test individuales.
 ([`tests/test_eval_harness.py`](tests/test_eval_harness.py),
 [`tests/test_judge.py`](tests/test_judge.py),
 [`tests/test_eval_stats.py`](tests/test_eval_stats.py)).

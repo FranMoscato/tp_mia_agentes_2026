@@ -277,16 +277,10 @@ resuelva más.
 A su vez, el veredicto del juez sobre el summarizer fue tajante y resulta congruente con lo analizado anteriormente: 0.21 en trazas "sin
 redundancia" contra 0.58-0.62 del resto.
 
-**Es confiable el juez.** Para saberlo comparamos su veredicto contra una
-referencia determinística: código que decide los mismos tres criterios desde
-propiedades objetivas de la traza (orden de mirar antes de actuar, cantidad
-de errores de herramienta, repeticiones). Que la referencia sea código y no
-otro LLM es lo que evita la circularidad. La medida es el kappa de Cohen por
-criterio, corrida sobre las 96 trazas de la corrida canónica (59 éxitos y 37
-fallos, con variación real, a diferencia de un primer intento sobre un
-conjunto de solo 8 trazas fallidas que no permitía distinguir nada).
+#### Confiabilidad del Juez
+Para evaluar la confiabilidad del juez del agente, construimos una referencia determinística basada en código que aproxima tres aspectos observables de las trazas: si el agente mira antes de actuar, la cantidad de errores de herramientas y la presencia de repeticiones. Esta referencia no pretende capturar todos los casos ni toda la complejidad del comportamiento del agente, sino proporcionar una señal objetiva e independiente con la cual contrastar al juez. Esto permite evitar la circularidad de validar un LLM utilizando otro LLM como referencia. Comparamos ambos veredictos mediante Cohen’s kappa por criterio, sobre las 96 trazas de la corrida canónica. La necesidad del juez surge precisamente de las limitaciones de esta referencia determinística: hay aspectos de la calidad y del comportamiento del agente que no pueden reducirse fácilmente a reglas sobre la traza y requieren una evaluación más flexible.
 
-Primera medición, con la referencia original:
+Los primero resultados fueron los siguientes:
 
 | Criterio | acuerdo bruto | kappa | ref dice "sí" | juez dice "sí" |
 |---|---:|---:|---:|---:|
@@ -294,7 +288,7 @@ Primera medición, con la referencia original:
 | exploracion_ordenada | 0.85 | 0.26 | 0.97 | 0.82 |
 | acciones_apoyadas | 0.73 | 0.00 | 0.96 | 0.75 |
 
-Ninguno de los tres llega a una zona de acuerdo realmente confiable. La
+Ninguno de los tres criterios llega a una zona de acuerdo realmente confiable. La
 hipótesis inmediata fue que el problema era una referencia saturada
 (diciendo "sí" casi siempre), así que endurecimos acciones_apoyadas: además
 de exigir cero errores de herramienta, ahora exige que todo uso de un objeto

@@ -89,13 +89,7 @@ resueltos (Wilson se comporta de manera mas precisa que un intervalo normal cerc
 - El
 **overhead** contra el camino óptimo es la cantidad de llamadas dividida por el camino
 más corto posible, medido sobre los casos resueltos.
-- Los **tokens consumidos** por caso resuelto son los tokens totales (incluidos los fallidos)
-sobre la cantidad de éxitos, porque lo que nos importa es cuánto cuesta un
-éxito, no el promedio por corrida (medimos en tokens porque con Ollama el
-costo es cero, y el costo en dólares es un derivado que solo tiene sentido
-con un proveedor pago).
-- La **latencia** se midio en percentiles 50 y 95, nunca en
-promedio, ya que el mismo esconde justamente los casos lentos.
+
 
 ![Grafo de estados de study-with-key con el óptimo del BFS resaltado](docs/m3_grafo_estados.png)
 
@@ -103,7 +97,15 @@ El camino resaltado (examinar la alfombra, tomar la llave dorada, usarla) son
 tres acciones y es el óptimo para study-with-key. El escritorio es un señuelo
 con cajones vacíos: revisarlo de nuevo no acerca al objetivo, y es
 justamente ese tipo de exploración de más lo que penaliza el overhead y lo
-que evalúa el juez.
+que evaluara el juez.
+
+- Los **tokens consumidos** por caso resuelto son los tokens totales (incluidos los fallidos)
+sobre la cantidad de éxitos, porque lo que nos importa es cuánto cuesta un
+éxito, no el promedio por corrida (medimos en tokens porque con Ollama el
+costo es cero, y el costo en dólares es un derivado que solo tiene sentido
+con un proveedor pago).
+- La **latencia** se midio en percentiles 50 y 95, nunca en
+promedio, ya que el mismo esconde justamente los casos lentos.
 
 La dimensión cualitativa mide si el agente exploró con método, algo que no
 se puede verificar con código: si abrió la puerta, eso ya lo confirma el

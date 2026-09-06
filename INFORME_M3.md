@@ -156,7 +156,7 @@ En el otro extremo, el summarizer pierde en todos los ejes a la vez: la
 mitad de accuracy que react, 3.4 veces más tokens por caso resuelto y 7
 veces peor latencia p95.
 
-### Accuracy por dificultad y por escenario
+### Accuracy por dificultad 
 
 La accuracy cae de forma monótona con la dificultad en las cuatro
 configuraciones como podiamos esperar:
@@ -168,13 +168,11 @@ configuraciones como podiamos esperar:
 | hard | 4/6 | 3/6 | 4/6 | 1/6 |
 | extreme | 6/9 | 4/9 | 4/9 | 0/9 |
 
-![Tasa de éxito por escenario × config](docs/m3_heatmap.png)
-
 Dos cosas que la vista agregada esconde. El summarizer colapsa con la
 dificultad: va parejo con el resto en easy/medium y se derrumba a 1/6 y 0/9
 cuando el horizonte se alarga, justo donde un resumen de estado debería
-ayudar más. Y react y react_generico empatan en hard (4/6): la ventaja del
-prompt especializado no es pareja, se juega en medium y extreme.
+ayudar más.  react y react_generico tienen una performance parecida en los escenarios "hard" pero la ventaja del
+prompt especializado se demuestra en los escenarios "medium" y "extreme".
 
 Óptimo por escenario, calculado por búsqueda: study-with-key 3, color-locks
 11, apartment-keys 7, library-search 7, office-sequence 13, extreme-archive

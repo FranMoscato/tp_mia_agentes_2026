@@ -79,28 +79,23 @@ base es el bucle normal con el prompt de escape, sin resumen ni gate.
 
 Medimos sobre el estado del mundo, no sobre lo que dice el agente: un
 escenario cuenta como resuelto solo si una verificación de código confirma el
-cambio físico (por ejemplo, la puerta abierta). Reportamos varias dimensiones
-en vez de un puntaje único, porque la calidad de un agente no es un número;
-las restricciones duras (abrió o no) son un filtro binario, no un término de
-un promedio; y como una corrida sola es anécdota, cada métrica va con su
-dispersión.
+cambio físico (la puerta abierta). Reportamos varias dimensiones
+en vez de un puntaje único ya que las restricciones duras (abrió o no) son un filtro binario, no un término de un promedio:
 
-Accuracy, con intervalo de Wilson al 95%, mide la fracción de casos
-resueltos (Wilson se porta mejor que un intervalo normal cerca de 0 o 1, y
-con 8 escenarios y pocas repeticiones un número pelado es poco honesto).
-pass@k mide si el agente resuelve en al menos uno de k intentos (capacidad);
-pass^k, si lo resuelve en todos (confiabilidad); la diferencia entre ambos es
-la varianza, y para un agente sin supervisión la que importa es pass^k. El
-overhead contra el óptimo es la cantidad de llamadas dividida por el camino
-más corto posible, medido sobre los casos resueltos; el óptimo no lo
-copiamos del enunciado, lo calculamos con búsqueda por anchura sobre el
-grafo de estados, y coincide con el enunciado en los 8 escenarios. Los
-tokens por caso resuelto son los tokens totales (incluidos los fallidos)
-sobre la cantidad de éxitos, porque lo que importa es cuánto cuesta un
-éxito, no el promedio por corrida; medimos en tokens porque con Ollama el
+ - **Accuracy**, con intervalo de Wilson al 95%, mide la fracción de casos
+resueltos (Wilson se comporta de manera mas precisa que un intervalo normal cerca de 0 o 1).
+- **pass@k** mide si el agente resuelve en al menos uno de k intentos (capacidad)
+- **pass^k** Mide la consistencia en la capacidad de resolucion (confiabilidad)
+- El
+**overhead** contra el camino óptimo es la cantidad de llamadas dividida por el camino
+más corto posible, medido sobre los casos resueltos.
+- Los **tokens consumidos** por caso resuelto son los tokens totales (incluidos los fallidos)
+sobre la cantidad de éxitos, porque lo que nos importa es cuánto cuesta un
+éxito, no el promedio por corrida (medimos en tokens porque con Ollama el
 costo es cero, y el costo en dólares es un derivado que solo tiene sentido
-con un proveedor pago. La latencia va en percentiles 50 y 95, nunca en
-promedio, porque el promedio esconde justo los casos lentos.
+con un proveedor pago).
+- La **latencia** se midio en percentiles 50 y 95, nunca en
+promedio, ya que el mismo esconde justamente los casos lentos.
 
 ![Grafo de estados de study-with-key con el óptimo del BFS resaltado](docs/m3_grafo_estados.png)
 

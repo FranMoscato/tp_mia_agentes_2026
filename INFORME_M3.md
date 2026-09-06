@@ -288,16 +288,20 @@ Los primero resultados fueron los siguientes:
 | exploracion_ordenada | 0.85 | 0.26 | 0.97 | 0.82 |
 | acciones_apoyadas | 0.73 | 0.00 | 0.96 | 0.75 |
 
-Ninguno de los tres criterios llega a una zona de acuerdo realmente confiable. La
+Dos de los tres criterios no llegan a una zona de acuerdo realmente confiable. La
 hipótesis inmediata fue que el problema era una referencia saturada
-(diciendo "sí" casi siempre), así que endurecimos acciones_apoyadas: además
+(diciendo "sí" casi siempre), así que endurecimos la logica de acciones_apoyadas: además
 de exigir cero errores de herramienta, ahora exige que todo uso de un objeto
-venga después de haberlo tomado con éxito, la misma garantía que el gate
-impone por código, así que es una propiedad real del dominio y no un umbral
-elegido para mover el número. Su tasa de "sí" bajó de 0.96 a 0.75: la
-referencia pasó a discriminar de verdad.
+venga después de haberlo tomado con éxito (la misma garantía que el gate
+impone por código). Su tasa de "sí" bajó de 0.96 a 0.75: la
+referencia pasó a discriminar en mayor medida.
 
-Segunda medición, tras ese cambio:
+Un punto de lectura que vale para los tres criterios: un kappa bajo no
+equivale a que el juez nunca acierte. Cuando una de las dos partes dice "sí"
+el 96% de las veces, el acuerdo esperado por azar ya es altísimo y el kappa
+lo descuenta hasta anularlo, aunque el acuerdo bruto sea alto. 
+
+Segunda medición, tras realizar cambio en las referencias:
 
 | Criterio | ref dice "sí" | juez dice "sí" | kappa |
 |---|---:|---:|---:|
@@ -305,20 +309,22 @@ Segunda medición, tras ese cambio:
 | acciones_apoyadas (endurecida) | 0.96 -> 0.75 | 0.75 | 0.00 -> -0.056 |
 | exploracion_ordenada | 0.97 | 0.82 | 0.26 |
 
-La hipótesis se refutó a medias, y eso resultó más informativo que si
-hubiera funcionado: con la referencia ya discriminando, el kappa de
+Con la referencia ya discriminando, el kappa de
 acciones_apoyadas siguió en cero. Ambas partes reparten en la misma
 proporción (0.75 y 0.75) pero no coinciden en cuáles casos, que es acuerdo
-al nivel del azar. El diagnóstico correcto es entonces por criterio, no
-global: sin_redundancia_evitable tiene un acuerdo moderado y es utilizable;
-acciones_apoyadas tiene una referencia que discrimina y aun así el juez no
-coincide, un fallo real del juez en ese criterio; exploracion_ordenada
-todavía tiene una referencia saturada (0.97) y no se puede distinguir nada
-ahí.
+al nivel del azar. 
 
-**Sesgo hacia uno mismo, medido.** Corrimos también el juez propio
-(nova-lite juzgando sus propias trazas) sobre los mismos 96 casos que ya
-había juzgado nova-pro:
+En base a estOS resultados, entendemos que al confiabilidad de nuestro Juez debe analizarse por criterio, y no de manera
+global:
+
+- sin_redundancia_evitable tiene un acuerdo moderado y es utilizable
+- acciones_apoyadas tiene una referencia que discrimina y aun así el juez no
+coincide (un fallo real del juez en ese criterio)
+- exploracion_ordenada todavía tiene una referencia saturada (0.97) y debería continuar ajustandose.
+
+##### Sesgo hacia uno mismo, medido:
+Utilizar un modelo mas grande como juez tiene un costo asociado mayor que utilizar el mismo modelo que el agente. Bajo esta premisa, decidimos probar si se obtenían resultados similares con los dos jueces. Corrimos el juez propio
+(nova-lite juzgando sus propias trazas) sobre los mismos 96 casos que ya había juzgado nova-pro:
 
 | Configuración | juez ajeno | juez propio | sesgo |
 |---|---:|---:|---:|
@@ -329,30 +335,13 @@ había juzgado nova-pro:
 | global | 2.04 | 2.45 | +0.41 |
 
 El modelo se infla 0.41 puntos sobre 3 (+20%) al juzgarse a sí mismo, pero lo
-importante es que cuanto peor la trayectoria, más se auto-premia: el brazo
+importante es que cuanto peor es la trayectoria, más se auto-premia: el esquema
 que peor rinde (summarizer) recibe más del doble de sesgo que el que mejor
 rinde (gate). Esto tiene dos consecuencias que un sesgo parejo no tendría:
 comprime el poder de discriminar (la brecha entre el mejor y el peor brazo
 cae de 0.92 a 0.67), y da vuelta el ranking (con el juez ajeno gana gate,
-con el propio gana react). La conclusión sobre qué configuración produce
-mejores trayectorias depende de quién juzga, lo cual confirma con datos que
+con el propio gana react). Esto confirma con datos empiricos que
 usar un juez distinto del agente no era una precaución solo teórica.
-
-Un punto de lectura que vale para los tres criterios: un kappa bajo no
-equivale a que el juez nunca acierte. Cuando una de las dos partes dice "sí"
-el 96% de las veces, el acuerdo esperado por azar ya es altísimo y el kappa
-lo descuenta hasta anularlo, aunque el acuerdo bruto sea alto. Por eso
-reportamos los dos números: uno solo de los dos puede engañar.
-
-También probamos la variante de una llamada por criterio en vez de una sola,
-pidiéndole razonar antes de decidir. Con el juez local la cobertura se
-derrumbó a cero: pedirle razonar lo hace responder en texto en vez de llamar
-a la herramienta de veredicto, el mismo problema que el juez debería
-detectar, y triplicar las llamadas triplica la exposición a esa falla. Con
-nova-pro la cobertura pasó a 96/96, lo que cierra el argumento: el problema
-era la capacidad del juez para emitir el veredicto estructurado, no el
-diseño de la rúbrica. Mantenemos el modo de una sola llamada como default
-porque es más barato y ya da cobertura total.
 
 ### Comparación entre modelos y proveedores
 

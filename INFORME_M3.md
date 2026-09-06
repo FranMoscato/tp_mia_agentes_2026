@@ -107,21 +107,12 @@ con un proveedor pago).
 - La **latencia** se midio en percentiles 50 y 95, nunca en
 promedio, ya que el mismo esconde justamente los casos lentos.
 
-La dimensión cualitativa mide si el agente exploró con método, algo que no
-se puede verificar con código: si abrió la puerta, eso ya lo confirma el
-chequeo programático, y el juez aporta solo donde no hay verificación
-posible (si miró antes de tomar, si repitió acciones, si usó algo que no
-tenía). Puntúa la trayectoria completa con una rúbrica, mirando la traza real
-de llamadas (no el texto final, que muchas veces ni llega), y devuelve el
+ - La **dimensión cualitativa** medira si el agente exploró con metodologia (de manera "logica"), algo que no se puede verificar con código (si miró antes de tomar, si repitió acciones, si usó algo que no
+tenía). El **juez** puntúa la trayectoria completa con una rúbrica, mirando la traza real
+de llamadas, y devuelve el
 puntaje con su justificación para poder auditarlo.
 
-Un juez es un instrumento, no un oráculo: lo calibramos comparando su
-veredicto contra uno determinístico derivado de propiedades objetivas de la
-traza, con el coeficiente kappa de Cohen, que corrige el acuerdo esperable
-por azar (un juez que siempre dice lo mismo puede tener 95% de acierto
-aparente y kappa 0). Si el kappa da bajo no confiamos en sus números aunque
-el juez ya esté armado, y es justo lo que pasó con dos de los tres criterios
-(más abajo).
+    Un juez es un instrumento que debe ser calibrado: lo calibramos comparando su veredicto contra uno determinístico derivado de propiedades objetivas de la traza, con el coeficiente kappa de Cohen, que corrige el acuerdo esperable por azar (un juez que siempre dice lo mismo puede tener 95% de acierto aparente y kappa 0). Si el kappa da bajo no confiamos en sus números aunque el juez ya esté armado, y es justo lo que pasó con dos de los tres criterios (más abajo).
 
 Todo sale de correr eval/run.py sin pasos manuales. Cada corrida guarda la
 traza de cada caso y un resumen, versionando modelo, prompt y commit de git.

@@ -191,6 +191,17 @@ horizonte del dataset). La etiqueta "extreme" agrupa cosas muy distintas, y
 con un solo escenario por celda en desarrollo el split queda desbalanceado:
 es una limitación del diseño del split, no una señal de sobreajuste.
 
+### Tokens por caso resuelto:
+
+| Configuración | Tokens/resuelto | vs. react |
+|---|---:|---:|
+| react_generico | 114.328 | -20% |
+| react | 143.340 | — |
+| gate | 161.362 | +13% |
+| summarizer | 481.678 | +236% |
+
+Comparando todas las configuraciones contra react (aquel que obtuuvo la mayor accuracy), podemos observar que el summarizer cuesta 3.4 veces más por cada caso que resuelve. Si sumamos este resultado a los resultados anteriores, podemos concluir que no es que sea caro y algo mejor, es caro y peor.
+
 ### Modos de fallo
 
 Definimos las categorías mirando las trazas reales, no a priori. Un punto a destacar es que la que
@@ -417,45 +428,7 @@ cierra el loop temprano y por eso "cuesta poco". De aquí surge el argumento de 
 para medir tokens por caso resuelto y no tokens por caso: con el
 denominador en cero, el numerador chico no significa nada.
 
-### Qué hace el agente en la práctica
 
-![Perfil de uso de herramientas por configuración](docs/m3_tools.png)
-
-Con nova-lite el agente usa los cinco verbos, incluidos los dos que la
-corrida local nunca disparaba (use y go daban cero en casi todos los brazos
-locales, y como abrir la puerta requiere use, ese perfil era la cara
-agregada del 0/8 local). Ahora react emite 92 use y resuelve 19 de 24: lo
-que antes leíamos como "el agente explora pero no ejecuta" era un límite del
-modelo, no del diseño. Dentro de las configuraciones actuales, react es la
-que más use emite y la que más resuelve; gate emite casi la mitad y más
-examine, porque bloquea usos inválidos y el agente gasta más turnos
-inspeccionando antes de actuar.
-
-La tasa de acción inválida es 0.000 en react, react_generico y summarizer, y
-0.010 en gate. Que sea justo el brazo con gate el único con un valor no
-nulo es porque el gate rechaza la acción antes de ejecutarla y ese rechazo
-se cuenta como error, mientras que en los otros brazos la acción inválida
-directamente no se llega a intentar con este modelo.
-
-El progreso parcial (objetos tomados, salas visitadas, contenedores
-abiertos) ya es informativo con este modelo: react toma 2.5 objetos en
-promedio, visita 2.5 salas y abre 2.0 contenedores; el summarizer se queda en
-1.6 / 2.2 / 1.0. Ordena las configuraciones igual que la accuracy, lo que da
-confianza en que mide avance real.
-
-![Costo en tokens por configuración](docs/m3_costo.png)
-
-Los tokens por caso resuelto, ahora que hay éxitos reales para calcularlos:
-
-| Configuración | Tokens/resuelto | vs. react |
-|---|---:|---:|
-| react_generico | 114.328 | -20% |
-| react | 143.340 | — |
-| gate | 161.362 | +13% |
-| summarizer | 481.678 | +236% |
-
-El summarizer cuesta 3.4 veces más por cada caso que resuelve: no es que sea
-caro y algo mejor, es caro y peor.
 
 ## 4. Experimentos
 

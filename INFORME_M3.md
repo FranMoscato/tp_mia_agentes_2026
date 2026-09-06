@@ -193,9 +193,9 @@ es una limitación del diseño del split, no una señal de sobreajuste.
 
 ### Modos de fallo
 
-Definimos las categorías mirando las trazas reales, no a priori: la que
+Definimos las categorías mirando las trazas reales, no a priori. Un punto a destacar es que la que
 dominaba con el modelo local (texto en vez de acción) no se podía anticipar
-de antemano, y con nova-lite prácticamente desaparece.
+de antemano, y con nova-lite desaparece prácticamente.
 
 ![Modos de fallo por configuración](docs/m3_fallos.png)
 
@@ -212,17 +212,16 @@ El modo de fallo dominante cambió de naturaleza al cambiar de modelo. Con
 qwen2.5:3b era texto en vez de acción: el modelo entendía qué hacer pero lo
 describía en vez de emitir la llamada, y eso cerraba el bucle antes de
 actuar. Con nova-lite ese modo casi desaparece (0 casos en react). Es un
-resultado importante: ese fallo es del protocolo (el modelo devuelve texto
-donde debía emitir una llamada) y no dice nada sobre el diseño del agente:
-el motor de tool-use de M1 está bien, el modelo chico no lo acciona. Los
+resultado importante: el motor de tool-use de M1 está bien, solo que el modelo chico no lo acciona de manera correcta. Los
 modos que quedan con nova-lite sí hablan del diseño: agotar las iteraciones
 sin llegar (un fallo de eficiencia de trayectoria, coherente con el overhead
 de 2.4 a 2.8 veces el óptimo) y entrar en loop (repetir la misma llamada con
 los mismos argumentos).
 
-El summarizer loopea, y ese es el mecanismo de su mal desempeño: 9 de sus 24
+Al analizar los modos de fallo, sale a luz un resultado poco intuitivo: El summarizer crea loops, y eso lleva su mal desempeño: 9 de sus 24
 casos (37%) terminan en loop, contra 2 de react. La racha máxima de llamadas
-idénticas consecutivas lo muestra directo:
+idénticas consecutivas lo muestra de manera clara:
+
 
 | Configuración | racha máxima | casos con racha >= 3 |
 |---|---:|---:|
@@ -232,7 +231,7 @@ idénticas consecutivas lo muestra directo:
 | summarizer | 23 | 9 |
 
 Veintitrés llamadas idénticas seguidas. Reinyectar un estado resumido en
-cada turno no ancla al agente, lo encierra: si el resumen omite o deforma el
+cada turno puede no anclar al agente sino encerrarlo: si el resumen omite o deforma el
 efecto de la última acción, el agente vuelve a intentarla, y el resumen
 siguiente (derivado de esa misma interacción) vuelve a omitirla.
 

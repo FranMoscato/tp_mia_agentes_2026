@@ -1,27 +1,20 @@
 # Informe M3: evaluación sobre salas de escape
 
-Tercero de tres informes sobre el mismo agente. M1 fue el agente y sus
+Esta entrega representa el tercer informe de los tres milestones del trabajo practico de agentes. M1 fue el agente y sus
 herramientas, M2 memoria y robustez, acá lo evaluamos jugando una sala de
 escape.
 
 Las 5 secciones tienen datos reales de Bedrock: la corrida canónica es con
 amazon.nova-lite-v1:0, 8 escenarios x 4 configuraciones x 3 repeticiones, 96
-casos, más una escalera de capacidad entre nova-micro, nova-lite y nova-pro,
-y el juez fuerte (nova-pro juzgando a nova-lite, con cobertura completa). Las
-corridas locales (qwen2.5:3b, llama3.2) se conservan como comparación entre
+casos. Evaluamos la capacidad entre modelos como mortor del agente (nova-micro, nova-lite y nova-pro),
+y como el mas fuerte se desarrollaba como juez (nova-pro juzgando a nova-lite, con cobertura completa). Las corridas locales (qwen2.5:3b, llama3.2) se conservan como comparación entre
 modelos.
-
-El hallazgo que ordena todo el informe: el techo dejó de ser el modelo. La
-accuracy sube de 0 (modelo local) a 0.792 con nova-lite, y deja de subir con
-nova-pro (0.625, sin diferencia significativa). Lo que falta para cerrar la
-brecha hay que buscarlo en el diseño del agente, no en pagar por un modelo
-más grande.
 
 ## Resumen
 
 Aplicamos el framework de M1 y M2 a un mundo tipo sala de escape (inspirado
 en ALFWorld): el agente tiene que abrir la puerta principal usando cinco
-verbos (look, examine, take, use, go). Construimos una infraestructura de
+tools (look, examine, take, use, go). Construimos una infraestructura de
 evaluación reproducible (eval/run.py) que corre el agente sobre los 8
 escenarios, guarda la traza de cada caso y calcula métricas cuantitativas más
 una dimensión cualitativa evaluada por otro LLM (eval/judge.py). Comparamos
@@ -34,42 +27,29 @@ Los cuatro resultados principales:
 
 1. El agente resuelve los 8 escenarios, pero no de forma confiable: puede
    resolverlos todos en algún intento (pass@k = 1.0) pero solo 5 de 8 en los
-   tres intentos (pass^k = 0.625). El límite no es capacidad, es
+   tres intentos (pass^k = 0.625). Nuestro limitante no es capacidad, es
    consistencia.
-2. El cuello de botella dejó de ser el modelo. Una escalera de capacidad
-   (nova-micro a nova-lite a nova-pro) muestra que la accuracy sube fuerte y
-   después deja de subir. Lo que falta hay que buscarlo en el diseño del
-   agente.
-3. El resumen de estado perjudica, y sabemos por qué: induce loops. Mitad de
-   accuracy, 3.4 veces el costo por caso resuelto y 7 veces la latencia, con
-   9 de 24 casos entrando en un loop de hasta 23 llamadas idénticas.
-4. El gate vale según con qué modelo corras: ayuda al modelo débil de forma
-   significativa y no ayuda al fuerte. No es una mejora incondicional, es un
-   seguro cuyo valor cae a medida que sube la capacidad del modelo.
+2. Testeamos el impacto de aumentar la capacidad del modelo sobre la performance del agente,    comparando nova-micro, nova-lite y nova-pro. La performance mejora fuertemente al principio, pero luego se estanca. Esto indica que el próximo cuello de botella probablemente no sea un modelo más grande, sino un mejor harness. El foco pasa entonces a optimizar el framework del agente: prompting, uso de herramientas, manejo del estado, planificación y estrategias de recuperación.
+3. Al introducir un resumen de estado antes de cada mensaje enviado al LLM, observamos un deterioro significativo de la performance, principalmente asociado a la aparición de loops. La accuracy se redujo a la mitad, el costo por caso resuelto aumentó 3,4× y la latencia 7×; además, 9 de 24 casos entraron en loops de hasta 23 llamadas idénticas. Si bien esto sugiere que el mecanismo de resumen puede estar interfiriendo con el proceso de decisión del agente, es posible que el problema se deba a una implementación no óptima del resumen de estado, por lo que sería necesario refinar este componente antes de concluir que el enfoque en sí resulta perjudicial.
+4. Al introducir el gate deterministico (sobre el uso de objetos fuera del inventario o IDs inexistentes) y evaluar su impacto con modelos de distinta capacidad, observamos que su efecto depende del modelo utilizado. El mecanismo mejora significativamente la performance de los modelos más débiles, mientras que en los modelos más capaces el beneficio es marginal o inexistente. Esto sugiere que el gate funciona principalmente como un mecanismo de seguridad o robustez para compensar limitaciones del modelo, cuyo valor disminuye a medida que aumenta la capacidad del modelo.
 
 ## 1. Cómo lo encaramos
 
 El agente de M3 es el mismo de M1 y M2, sin bifurcar: system prompt más
-herramientas más memoria, corriendo dentro del mismo bucle. Es un agente
-autónomo, no un workflow fijo: el LLM decide en tiempo de ejecución qué
-herramienta llamar y cuándo parar, no nuestro código. Es la elección correcta
-para un espacio abierto e impredecible como la sala de escape, aunque el
-precio es más varianza y más trabajo de debugging que un pipeline
-determinístico.
+herramientas y estrategias de administracion de memoria, corriendo dentro del mismo bucle. 
 
 El bucle y las herramientas vienen de M1: el runner registra los verbos del
 mundo como herramientas y el agente las ejecuta como siempre. Los errores
 vuelven como observaciones en vez de romper el bucle, lo cual deja que el
 modelo se corrija solo, algo clave en un dominio donde equivocarse de llave o
-de identificador es esperable. El estado y la memoria vienen de M2: la sala
+de identificador es un caso posible. El estado y la memoria vienen de M2: la sala
 de escape depende de lo ya observado, tomado y abierto, y la ventana
 deslizante conserva el objetivo inicial mientras descarta los turnos del
 medio. Los escenarios de varias salas (apartment-keys, office-sequence)
 ponen esto a prueba: hay que navegar, recordar el mapa y volver.
 
-Del sistema completo (entorno, agente, evaluación), el único componente
-autónomo es el núcleo del bucle. Todo lo demás es workflow determinístico
-(el gate, la ventana de memoria, el harness, la búsqueda del camino óptimo) o
+Del sistema completo (entorno, agente, evaluación),cuenta tanto con workflow/procesos determinístico
+(el gate, la actualizacion de la ventana de memoria, el harness, la búsqueda del camino óptimo) o
 workflow con un LLM en un paso fijo (el resumidor y el juez, que llaman al
 LLM pero nunca deciden el control de flujo).
 
@@ -78,17 +58,21 @@ LLM pero nunca deciden el control de flujo).
 ![El loop ReAct por dentro: qué decide el LLM vs. qué es control-flow fijo](docs/m3_loop_react.png)
 
 Agregamos tres cosas específicas para M3, todas detrás de configuración para
-no tocar M1 ni M2. El system prompt es inyectable: el que trae el agente por
+no tocar M1 ni M2:
+ 1.  El system prompt es inyectable: el que trae el agente por
 defecto es genérico, y el runner de M3 le inyecta uno propio de sala de
 escape, versionado, sin que una corrida de M1/M2 arranque creyendo que está
-en el juego. El resumidor de estado es opcional: antes de cada llamada puede
+en el juego.
+2. Un resumidor de estado opcional: antes de cada llamada puede
 re-derivar un estado estructurado (inventario, ubicación, salidas) con una
-llamada extra al LLM. Elegimos estado estructurado y no texto libre porque
-obliga a curar la información con menos pérdida; su costo en tokens se cuenta
-aparte para comparar justo. El gate determinístico también es opcional: un
+llamada estructurada extra al LLM. Al no permitir texto libre al modelo,
+obligamos al LLM a curar la información con menos pérdida. Cabe destacar que el costo extra en tokens se cuenta de manera aparte para poder realizar comparaciones mas especificas.
+3.  Un gate determinístico opcional: un
 chequeo simple que bloquea, antes de ejecutar, usar un objeto fuera del
 inventario o un identificador inexistente, algo que ningún prompt garantiza
-con certeza. Ninguna de las tres es el comportamiento por defecto: el agente
+con certeza. 
+
+Ninguna de las tres es el comportamiento por defecto: el agente
 base es el bucle normal con el prompt de escape, sin resumen ni gate.
 
 ## 2. Cómo medimos

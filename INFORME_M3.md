@@ -237,7 +237,7 @@ siguiente (derivado de esa misma interacción) vuelve a omitirla.
 
 ![Redundancia: racha máxima de tool-calls repetidas](docs/m3_redundancia.png)
 
-Priorizar los modos de fallo solo por frecuencia esconde los raros pero
+Otro punto a destacar es que priorizar los modos de fallo solo por frecuencia esconde los modos raros pero
 caros:
 
 | Modo de fallo | Frecuencia | Latencia media | Costo total |
@@ -247,21 +247,16 @@ caros:
 | crash | 2 | 132.8 s | 265.6 s |
 | prosa_en_vez_de_tool | 3 | 40.4 s | 121.1 s |
 
-Por frecuencia manda agotar iteraciones (20 contra 12), pero por costo total
-manda el loop, porque cada uno es 3 veces más caro. Priorizar solo por
-frecuencia habría puesto primero al techo de iteraciones; por frecuencia por
-costo, el objetivo número uno son los loops, y ya sabemos quién los produce:
-el summarizer, con 9 de los 12. Vale notar que esta priorización se dio
-vuelta respecto de la corrida local: ahí el modo más frecuente era la prosa
-(67 casos) y los loops eran raros pero caros (3 casos); ahora la prosa cayó
-a 3 casos y los loops se cuadruplicaron. La conclusión metodológica
-(priorizar por frecuencia por costo, no por frecuencia sola) sobrevivió al
-cambio de modelo; la lista concreta de prioridades, no.
+Si medimos por frecuencia de aparición, agotar iteraciones apreciera el fallo mas importante (20 contra 12) pero, si medimos por costo total, la creacion de loops resutla el modo de fallo mas preocupante, porque cada una de esas ejecuciones resulta mucho mas cara que quedarse sin iteraciones.
 
 ### Resultados del juez
 
 Checklist binario de 3 criterios, con nova-pro como juez (distinto del
 agente nova-lite y de mayor capacidad):
+
+- Que las trazas muestren un uso razonable de tools, **sin redundancia evitable**
+- Que el agente haya realizado una **exploración ordenada** (ej: Que al entrar a un cuarto observe y luego intente agarrar objetos)
+- Que el agente haya realizado **acciones apoyadas/sustentadas logicamente** (ej: Que no intente usar un objeto que no agarro todavía)
 
 | Configuración | Casos puntuados | Score (0-3) | ordenada | apoyadas | sin redundancia |
 |---|---:|---:|---:|---:|---:|
@@ -272,20 +267,15 @@ agente nova-lite y de mayor capacidad):
 
 ![Calidad de exploración por configuración](docs/m3_judge.png)
 
-Cobertura de 96 sobre 96, 100%. Con el juez local en modo de una llamada por
-criterio la cobertura se había derrumbado a 0 de 8; el juez fuerte puntúa
-todo, lo que confirma que aquella cobertura pobre era una limitación de
-capacidad del juez para emitir el veredicto estructurado, no del diseño de
-la rúbrica.
-
 El orden del juez coincide con la accuracy salvo en la cabeza: pone gate
-(2.38) apenas por encima de react (2.33) aunque react resuelve más (0.792
-contra 0.667). No es contradicción: el juez puntúa la calidad de la
+(2.38) apenas por encima de react (2.33) aunque react resuelve más casos (0.792
+contra 0.667). Esto no resulta una contradicción: el juez puntúa la calidad de la
 trayectoria, no si abrió la puerta, y es consistente con lo que hace el
 gate: cortar acciones inválidas produce trazas más limpias aunque no
-resuelva más. Donde el juez es tajante es en el summarizer: 0.21 en "sin
-redundancia" contra 0.58-0.62 del resto, la misma señal que la racha de 23
-llamadas repetidas, medida por una vía independiente.
+resuelva más. 
+
+El veredicto del juez sobre el summarizer fue tajante y resulta congruente con lo analizado anteriormente: 0.21 en trazas "sin
+redundancia" contra 0.58-0.62 del resto.
 
 **Es confiable el juez.** Para saberlo comparamos su veredicto contra una
 referencia determinística: código que decide los mismos tres criterios desde

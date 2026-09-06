@@ -159,7 +159,7 @@ veces peor latencia p95.
 ### Accuracy por dificultad y por escenario
 
 La accuracy cae de forma monótona con la dificultad en las cuatro
-configuraciones, que es lo mínimo que se le pide a un dataset bien graduado:
+configuraciones como podiamos esperar:
 
 | Dificultad | react | gate | react_generico | summarizer |
 |---|---:|---:|---:|---:|

@@ -134,9 +134,9 @@ reportamos los dos números en vez de solo el que conviene.
 
 ## 3. Resultados
 
-Corrida canónica: Bedrock con nova-lite-v1:0, prompt escape-v1, tope de 30
-iteraciones, 8 escenarios x 4 configuraciones x 3 repeticiones, 96 casos, dos
-horas y tres minutos, 0.75 dólares.
+**Corrida canónica:** Bedrock con nova-lite-v1:0, prompt escape-v1, tope de 30
+iteraciones, 8 escenarios x 4 configuraciones x 3 repeticiones (96 casos, dos
+horas y tres minutos).
 
 | Configuración | Accuracy (IC95%) | pass@k / pass^k | Overhead vs. óptimo | Tokens/resuelto | Latencia p50/p95 (s) |
 |---|---:|---:|---:|---:|---:|
@@ -145,12 +145,10 @@ horas y tres minutos, 0.75 dólares.
 | react_generico | 0.625 [0.427, 0.788] | 0.875 / 0.375 | 2.80x | 114.328 | 26.2 / 30.5 |
 | summarizer | 0.375 [0.212, 0.573] | 0.5 / 0.25 | 1.79x | 481.678 | 98.7 / 217.5 |
 
-El resultado más fuerte de la corrida es pass@k = 1.0 en react: el agente
-resuelve los 8 escenarios en al menos uno de los tres intentos, no hay
-ninguno que sea incapaz de resolver. Pero pass^k = 0.625, solo en 5 de 8 lo
-logra las tres veces. Esa brecha entre capacidad y confiabilidad es
-exactamente lo que las dos métricas existen para separar, y con el modelo
-local no se podía ver porque ambas daban cero. El límite del agente no es
+El resultado más fuerte de la corrida es pass@k = 1.0 en react "puro" con system prompt especializado: el agente
+resuelve los 8 escenarios en al menos uno de los tres intentos pero con pass^k = 0.625 (solo en 5 de 8 lo
+logra las tres veces). Esa brecha entre capacidad y confiabilidad es
+exactamente lo que las dos métricas existen para separar. Demeustra que el límite de nuestro agente no es
 saber resolver: es la consistencia, y eso reorienta el trabajo pendiente
 hacia reducir varianza de trayectoria, no hacia ampliar capacidades.
 

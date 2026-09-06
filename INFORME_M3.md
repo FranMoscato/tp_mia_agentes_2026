@@ -274,7 +274,7 @@ trayectoria, no si abrió la puerta, y es consistente con lo que hace el
 gate: cortar acciones inválidas produce trazas más limpias aunque no
 resuelva más. 
 
-El veredicto del juez sobre el summarizer fue tajante y resulta congruente con lo analizado anteriormente: 0.21 en trazas "sin
+A su vez, el veredicto del juez sobre el summarizer fue tajante y resulta congruente con lo analizado anteriormente: 0.21 en trazas "sin
 redundancia" contra 0.58-0.62 del resto.
 
 **Es confiable el juez.** Para saberlo comparamos su veredicto contra una

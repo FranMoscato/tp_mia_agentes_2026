@@ -350,9 +350,9 @@ mismo framework sobre varios modelos para separar los límites del modelo de
 los del framework. Corrimos cinco: qwen2.5:3b y llama3.2 en Ollama, y la
 familia Nova completa (micro, lite, pro) en Bedrock.
 
-**La escalera de capacidad.** Entre qwen2.5:3b y nova-lite cambian cuatro
-variables a la vez (tamaño, cuantización, familia de entrenamiento y API),
-así que ese contraste dice que el techo es del modelo pero no qué parte del
+#### La escalera de capacidad.
+Entre qwen2.5:3b y nova-lite cambian cuatro variables a la vez (tamaño, cuantización, familia de entrenamiento). La comparacion de estos dos modelos
+ demuestra que un limitante de la performance es el modelo en si modelo pero no qué parte del
 modelo. La familia Nova permite un contraste limpio: misma familia, misma
 API, mismo tratamiento, solo cambia la capacidad. Sobre la configuración
 react:
@@ -366,30 +366,18 @@ react:
 
 ![Accuracy por modelo × configuración](docs/m3_cmp_accuracy.png)
 
-La curva sube fuerte y después deja de subir. Ese es el hallazgo que ordena
-todo el informe: el cuello de botella ya no es el modelo. Con la salvedad de
-que no afirmamos que nova-pro sea peor que nova-lite: los intervalos se
-solapan de lleno y con 24 casos por escalón esa caída es compatible con
-ruido. Lo afirmable es que no mejora, y eso contrasta con el escalón
+La curva de performance sube fuertemente y después deja de subir, un descubrimiento importante ya que nos dice que el cuello de botella no es el modelo. Es importante destacar la salvedad de
+que, con estos datos, no afirmamos que nova-pro sea peor que nova-lite: los intervalos se
+solapan de lleno y con 24 casos por escalón esa caída de accuracy es compatible con
+ruido. Lo afirmarle es que no mejora la performance al comparar nova-lite y nova-pro, y eso contrasta con el escalón
 anterior, donde la mejora sí es clara. Un dato que refuerza la lectura:
 nova-pro tiene pass@k = 1.0 igual que nova-lite pero pass^k de 0.375 contra
 0.625, un modelo más capaz que resuelve lo mismo con más varianza apunta a
 que el límite está en la trayectoria, no en el razonamiento.
 
-Esta escalera no autoriza a decir que el techo sea del tamaño: entre los
-modelos locales y Nova cambian cuatro cosas a la vez, incluida la
-cuantización (los locales corren en 4 bits), que golpea justo donde estos
-modelos fallan. Para acotar ese problema corrimos una segunda escalera con
-los tres modelos locales, manteniendo familia y cuantización fijas: llama3.2
-(3.2B) y llama3.1 (8.0B) son la misma familia con la misma cuantización, así
-que entre esos dos solo cambia el tamaño, y pasar a 8B rompe el cero (gate
-pasa de 0/24 a 4/24, significativo). O sea que el cero de los modelos chicos
-no era solo daño por cuantizar. Lo que sigue sin poder atribuirse es la
-brecha entre el 8B local (0.125) y nova-lite (0.792), donde las otras tres
-variables siguen mezcladas.
 
-**Cómo falla cada modelo.** No es que un modelo falle "más": fallan por
-razones distintas, y la progresión se lee de menor a mayor capacidad:
+#### Cómo falla cada modelo.
+No es que un modelo falle "más": fallan por razones distintas, y la progresión se lee de menor a mayor capacidad:
 
 | Modelo | Modo dominante (react) | Uso de use/go |
 |---|---|---|
@@ -407,8 +395,9 @@ Recién con nova-lite la prosa desaparece del todo y quedan solo fallos de
 trayectoria, que es exactamente la condición que este informe necesitaba
 para poder concluir algo sobre el framework y no sobre el modelo.
 
-**El orden de las configuraciones según accuracy depende del modelo**, y es
-el resultado más interesante de la comparación cross-modelo:
+#### El orden de las configuraciones según accuracy depende del modelo
+
+La performance de nuestro framework segun sus distintas configuraciones cambia con el tamaño del modelo:
 
 ```
 nova-micro: gate (0.42) > generico (0.29) > react (0.28) ≈ summarizer (0.25)
@@ -416,19 +405,15 @@ nova-lite:  react (0.79) > gate (0.67) > generico (0.62) > summarizer (0.38)
 ```
 
 Con el modelo débil el gate gana; con el fuerte, react puro gana y el gate
-estorba. No es ruido, es lo que la teoría del gate predice: su función es
+estorba. Este es un resultado esperable dada la naturaleza del gate configurado: su función es
 suplir con reglas determinísticas lo que el modelo no sabe hacer solo. Cuando
-el modelo es incapaz, esas barandas lo salvan; cuando es competente, las
-mismas barandas le cortan trayectorias válidas. El mismo patrón, más débil,
-aparecía con los modelos locales: la única accuracy no nula del barrido
-local era llama3.2 con el summarizer, o sea el resumen ayudaba al modelo que
-actuaba y no al que no actuaba. Con Nova el efecto se invierte del todo: el
-summarizer queda último en los tres escalones.
+el modelo es incapaz, esas "barandas" lo salvan; cuando es competente, las
+mismas "barandas" no son utilizadas. 
 
 Por último, "barato" no es una virtud si no resolvés. Los modelos locales
 gastan un orden de magnitud menos en tokens, pero su accuracy es cero: no
 son eficientes, abandonan. El agente que responde en prosa a los tres turnos
-cierra el loop temprano y por eso "cuesta poco". Es el argumento de fondo
+cierra el loop temprano y por eso "cuesta poco". De aquí surge el argumento de fondo
 para medir tokens por caso resuelto y no tokens por caso: con el
 denominador en cero, el numerador chico no significa nada.
 

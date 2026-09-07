@@ -174,23 +174,6 @@ cuando el horizonte se alarga, justo donde un resumen de estado debería
 ayudar más.  react y react_generico tienen una performance parecida en los escenarios "hard" pero la ventaja del
 prompt especializado se demuestra en los escenarios "medium" y "extreme".
 
-Óptimo por escenario, calculado por búsqueda: study-with-key 3, color-locks
-11, apartment-keys 7, library-search 7, office-sequence 13, extreme-archive
-4, vault-combination 21, backtracking-vault 18.
-
-Para no ajustar el prompt ni el gate a escenarios puntuales, separamos los 8
-en desarrollo (uno por dificultad) y holdout, mirado solo al final. Con
-nova-lite el split da desarrollo 0.729 contra holdout 0.500. La brecha
-existe, pero desglosada por dificultad es lo contrario de sobreajuste: en
-medium y hard el holdout rinde mejor que desarrollo. Toda la brecha viene de
-extreme, y ahí el problema no es el split sino que los tres escenarios
-extreme no son igual de difíciles entre sí: desarrollo aporta solo
-extreme-archive (el más corto, óptimo 4) mientras holdout aporta
-vault-combination y backtracking-vault (óptimos 21 y 18, los dos de mayor
-horizonte del dataset). La etiqueta "extreme" agrupa cosas muy distintas, y
-con un solo escenario por celda en desarrollo el split queda desbalanceado:
-es una limitación del diseño del split, no una señal de sobreajuste.
-
 ### Tokens por caso resuelto:
 
 | Configuración | Tokens/resuelto | vs. react |
@@ -430,14 +413,11 @@ denominador en cero, el numerador chico no significa nada.
 
 
 
-## 4. Experimentos
+## 4. Experimentos y Analisis
 
-Cinco experimentos, cada uno aislando una pieza del framework: resumen de
+Con el fin de analizar como afectan el desempeño general cada parte del framework, realizamos cinco experimentos aislando cada una  una pieza del framework: resumen de
 estado, gate, prompt, corte de loop en runtime y tamaño de la ventana de
-memoria. Los dos últimos son resultados negativos (el mecanismo hace lo que
-promete y la accuracy no se mueve) y están acá porque descartan dos de las
-tres explicaciones candidatas para la brecha de consistencia. Son
-comparaciones apareadas: mismos escenarios, misma cantidad de repeticiones,
+memoria. Son comparaciones apareadas: mismos escenarios, misma cantidad de repeticiones,
 mismo entorno y modelo, cambiando solo el eje bajo estudio. El contraste de
 significancia siempre estratifica por escenario (Cochran-Mantel-Haenszel),
 por la razón explicada en la sección 2: agrupar todo mete la varianza entre
@@ -445,10 +425,9 @@ escenarios en el error estándar y puede tapar un efecto real.
 
 ### Resumen de estado (react vs. summarizer)
 
-Hipótesis: el resumen ayuda solo cuando el contexto crudo no entra en la
+**Hipótesis:** el resumen ayuda solo cuando el contexto crudo no entra en la
 ventana (por ejemplo en extreme-archive, diseñado para no caber en 16K
-tokens) y perjudica cuando entra, porque agrega costo y una re-derivación
-con pérdida que puede corromper identificadores justo donde el estado
+tokens) y perjudica cuando entra, porque agrega costo y puede corromper cuando el estado
 exacto importa.
 
 ![Latencia p50/p95 por configuración](docs/m3_latencia.png)
@@ -466,36 +445,19 @@ Resultado: el resumen perjudica, con significancia estadística.
 
 Contraste estratificado: p = 0.0015 (el agrupado da p = 0.0034, ambos
 coinciden, así que acá la conclusión no depende del método). La hipótesis
-original se refuta en su propio terreno: esperábamos que el resumen ayudara
+original se refuta. Esperábamos que el resumen ayudara
 donde el contexto crudo no entra, y es exactamente donde peor le va (0/9 en
-extreme contra 6/9 de react). El resumen no es caro-pero-útil en el
-horizonte largo, es caro y peor, y peor sobre todo ahí.
+extreme contra 6/9 de react). El resumen no es caro-pero-útil en los casos de gran contexto, es caro y ofrece peores resultados.
 
-El mecanismo del daño quedó identificado y es el loop, no la pérdida de
-información: 9 de 24 casos terminan en loop y la racha máxima llega a 23
-llamadas idénticas consecutivas. Reinyectar un estado resumido en cada turno
-no ancla al agente, lo encierra: si el resumen omite el efecto de la última
-acción, el agente la repite, y el resumen siguiente (derivado de esa misma
-interacción) vuelve a omitirlo.
-
-Esto corrige la conclusión que traíamos con los modelos locales, donde
-habíamos escrito que el efecto del resumen dependía del modelo (ayudaba a
-llama3.2, estorbaba a qwen) y que convenía activarlo de forma selectiva. Con
-la familia Nova el resumen queda último en los tres escalones de capacidad,
-incluido el más fuerte: esa dependencia del modelo era un artefacto de
-comparar dos modelos que fallaban por razones distintas, ambos con accuracy
-casi nula. La conclusión ahora es más simple: este diseño de resumen
-perjudica, y lo que habría que rediseñar no es cuándo activarlo sino qué
-re-inyecta.
+Reinyectar un estado resumido en cada turno puede generar loops si el resumen omite el efecto de la última
+acción, causando que el agente la repita, y el resumen siguiente (derivado de esa misma
+interacción) vuelva a omitirlo.
 
 ### Gate determinístico (react vs. gate)
 
-Hipótesis: ningún prompt garantiza con certeza evitar el uso inválido, un
-chequeo de código sí. El prompt tiene unas 200 líneas de reglas que no lo
-evitan, y un gate de apenas 15 líneas y costo cero debería eliminarlo.
+**Hipótesis:** El uso de un gate deterministico sobre el uso de herramientas deberia mejorar la performance ya que ningún prompt garantiza con certeza evitar el uso inválido de herramientas, pero un chequeo de código sí. 
 
-Resultado: el efecto del gate se invierte según la capacidad del modelo, el
-hallazgo más interesante de esta sección.
+Resultado: el efecto del gate depende según la capacidad del modelo.
 
 | Modelo | react | gate | Delta | p (estratificado) |
 |---|---:|---:|---:|---:|
@@ -503,12 +465,10 @@ hallazgo más interesante de esta sección.
 | nova-lite (fuerte) | 0.792 | 0.667 | -0.125 | 0.4219 |
 
 Con el modelo débil el gate ayuda de forma significativa; con el fuerte no
-ayuda (y la baja no es significativa, así que no afirmamos que perjudique).
-Es justo lo que la teoría del gate predice: suple con reglas determinísticas
-lo que el modelo no sabe hacer solo, y si el modelo ya es competente, las
-mismas barandas dejan de aportar.
+ayuda (la baja de accuracy no es significativa). Es justo lo que la teoría del gate predice: suple con reglas determinísticas
+lo que un modelo no sabe/puede hacer solo.
 
-El efecto en el modelo débil no es parejo, está concentrado en un escenario:
+Con el fin de entender como mejora la performance en modelos mas chicos, analizamos el efecto por escenario. Descubrimos que el mismo no es parejo y está concentrado en un escenario:
 
 | Escenario | react | gate | Delta |
 |---|---:|---:|---:|
@@ -518,21 +478,14 @@ El efecto en el modelo débil no es parejo, está concentrado en un escenario:
 | color-locks | 1/8 | 0/8 | -0.125 |
 | library-search | 1/8 | 0/8 | -0.125 |
 
-Reportar solo el promedio habría escondido esto. extreme-archive tiene 20
-expedientes con prosa burocrática: el modelo débil se pierde entre
-identificadores parecidos y el gate le bloquea los inválidos antes de
-gastarlos.
-
-Nota metodológica: el contraste agrupado en nova-micro daba p = 0.0957, no
-concluyente; estratificado por escenario da p = 0.0338, con exactamente los
-mismos 128 casos. Dos escenarios daban 0/8 en ambos brazos y no aportaban
-señal, pero inflaban el denominador del test agrupado.
-
-El gate entrega lo que el prompt no puede, pero su valor depende de con qué
-modelo corras: es un piso de garantías gratis que paga cuando el modelo es
+Extreme-archive tiene 20 expedientes con prosa burocrática: el modelo débil se pierde entre
+identificadores parecidos y el gate le bloquea los inválidos antes de gastarlos. Entendemos entonces que el gate entrega valor donde el prompt no puede, dependiendo de con qué
+modelo corras: es una base de garantías "gratis" que paga cuando el modelo es
 propenso a acciones inválidas, y se vuelve neutro cuando no lo es. No es una
-mejora incondicional del framework, es un seguro cuyo valor esperado cae a
+mejora incondicional del framework, es un seguro cuyo valor cae a
 medida que sube la capacidad del modelo.
+
+```Nota metodológica: el contraste agrupado en nova-micro daba p = 0.0957, no concluyente; estratificado por escenario da p = 0.0338, con exactamente los mismos 128 casos. Dos escenarios daban 0/8 en ambos brazos y no aportaban señal, pero inflaban el denominador del test agrupado.```
 
 ### Prompt especializado vs. genérico
 

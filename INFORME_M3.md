@@ -489,9 +489,7 @@ medida que sube la capacidad del modelo.
 
 ### Prompt especializado vs. genérico
 
-Hipótesis: el prompt de sala de escape está lleno de reglas contra responder
-en texto, así que debería reducir ese modo de fallo, que es el dominante con
-modelos débiles.
+Hipótesis: el prompt de sala de escape está lleno de reglas o estrategias de como usar herramientas de la sala de escape, por lo que debería mejorar la accuracy. Además, tiene notas para evitar enunciar el usos de tools en vez de hacer el llamado, así que debería reducir ese modo de fallo (dominante con modelos débiles).
 
 Resultado: el prompt especializado sí se traduce en accuracy.
 
@@ -502,29 +500,20 @@ Resultado: el prompt especializado sí se traduce en accuracy.
 | exhausted_iterations | 3 | 7 |
 | Llamadas de media | 21.38 | 21.42 |
 
-El delta es +0.167, pero no alcanza significancia (p = 0.277 estratificado):
-con 24 casos por brazo un efecto de ese tamaño queda dentro del ruido. Lo
-que sí es limpio es el perfil de fallo: la hipótesis de que el prompt
-especializado reduce la prosa se cumple (0 casos contra 2). Y aparece algo
-que no habíamos previsto: el genérico se queda sin iteraciones más del doble
-de veces gastando la misma cantidad de llamadas. No actúa menos, actúa igual
-de mucho pero peor dirigido, y se le acaba el presupuesto sin llegar.
+El delta en accuracy es +0.167 pero no alcanza significancia (p = 0.277 estratificado):
+con 24 casos por framework, un efecto de ese tamaño queda dentro del ruido.
 
-El prompt de dominio compra eficiencia de trayectoria, no capacidad de
-actuar: ambos brazos llaman herramientas con la misma intensidad, el
-especializado llega más seguido porque las ordena mejor.
+Lo que sí es limpio es el cambio en el perfil de fallo: la hipótesis de que el prompt
+especializado reduce la prosa se cumple (0 casos contra 2). Ademas, aparece algo
+que no habíamos previsto: el prompt genérico se queda sin iteraciones más del doble
+de veces gastando la misma cantidad de llamadas a herramientas. No actúa menos, sino que lo hace peor dirigido, y se le acaba el presupuesto sin lograr escapar. Analizandolo desde la otra cara de la misma moneda, podriamos decir que el prompt especializado compra eficiencia de trayectoria: ambas cponfiguraciones llaman herramientas con la misma intensidad pero el especializado logra escapar más seguido porque las ordena de mejor manera.
 
 ### Corte de loop en runtime
 
-La señal de loop es la repetición de la misma llamada con los mismos
-argumentos; el harness ya la medía después de correr pero el agente no hacía
-nada con ella. Agregamos que, a la tercera llamada idéntica consecutiva, en
-vez de reejecutar la herramienta se le devuelve al modelo una observación
-("ya la llamaste N veces con estos argumentos y el resultado no cambió,
-probá otra cosa"). Es un empujón, no un corte duro.
+La señal de loop es la repetición de la misma llamada con los mismos argumentos de manera consecutiva. Nuestro sistema de evaluación ya la medía después de correr pero no se enviaban señales al agente en runtime. Agregamos que, a la tercera llamada idéntica consecutiva, en vez de reejecutar la herramienta se le devuelve al modelo una observación
+("ya la llamaste N veces con estos argumentos y el resultado no cambió, probá otra cosa"). De esta manera, no se cortaría la ejecución del agente al entrar en un loop pero se le informaria de su comportamiento con la esperanza de que cambie.
 
-Hipótesis: como el loop es el modo de fallo más caro, cortarlo debería
-convertir parte de esos casos en éxitos o al menos liberar iteraciones.
+Hipótesis: como el loop es el modo de fallo más caro, cortarlo debería convertir parte de esos casos en éxitos o al menos liberar iteraciones.
 
 | | react | loop_breaker |
 |---|---:|---:|
@@ -534,22 +523,17 @@ convertir parte de esos casos en éxitos o al menos liberar iteraciones.
 | Intervenciones del corte | — | 1 en 24 casos |
 
 El mecanismo funciona y el efecto esperado no aparece: la racha máxima cae
-de 15 a 3, pero la accuracy no mejora (los intervalos se solapan). El dato
+de 15 a 3, pero la accuracy no mejora (diferencias no significativas). El dato
 revelador es que el corte intervino una sola vez en 24 casos: al cortar
-temprano, el modelo cambia de estrategia y ya no llega a rachas largas, el
-mecanismo se auto-previene, y por eso la racha baja tanto habiendo actuado
-tan poco.
+temprano, el modelo cambia de estrategia y ya no llega a rachas largas.
 
-Los loops largos eran un síntoma, no la causa. Eliminarlos no libera
-éxitos, lo que significa que en esos casos el agente no estaba "atascado y a
-punto de resolver": estaba perdido, y repetir era una forma de estarlo entre
-otras. Un resultado negativo, pero acota el problema: la brecha de
-consistencia no se cierra por el lado de la redundancia.
+Eliminar los loops no se tradujo en un aumento de éxitos, lo que significa que en esos casos el agente no estaba "trabado y a
+punto de resolver": estaba perdido, y repetir era una forma de estarlo entre otras.
 
 ### Ventana de memoria (50 vs. 120 mensajes)
 
 Hipótesis: si la ventana está descartando turnos que el agente necesita,
-ampliarla debería mejorar los escenarios de horizonte largo.
+ampliarla debería mejorar los escenarios de gran contexto.
 
 | | ventana 50 | ventana 120 |
 |---|---:|---:|
@@ -558,15 +542,14 @@ ampliarla debería mejorar los escenarios de horizonte largo.
 | Llamadas de media | 21.4 | 21.4 |
 | Tokens de input | 2.693.635 | 2.744.204 (+2%) |
 
-No mejora (p = 0.683 estratificado). Seis de los ocho escenarios dan
+Rsultados no significativos. Seis de los ocho escenarios dan
 exactamente el mismo resultado. Habíamos estimado que cerca de la mitad de
 los casos desbordaba la ventana de 50; si eso fuera cierto, pasar a 120
-habría aumentado el input mucho más que un 2%. No lo hizo, y las llamadas
-quedaron idénticas: la ventana casi no estaba recortando nada. La
-estimación era mala, la medición directa la corrigió. Con esto, la memoria
+habría aumentado el accuracy. No lo hizo, y las llamadas
+quedaron idénticas: la ventana casi no estaba recortando nada. La memoria
 de trabajo queda descartada como cuello de botella en este dataset. Junto
 con el corte de loop, dos de las tres explicaciones candidatas para la
-brecha de consistencia (redundancia y pérdida de contexto) quedan afuera.
+brecha de consistencia (redundancia y pérdida de contexto) quedan desestimadas.
 
 ## 5. Limitaciones y próximos pasos
 

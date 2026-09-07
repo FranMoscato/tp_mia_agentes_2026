@@ -551,45 +551,36 @@ de trabajo queda descartada como cuello de botella en este dataset. Junto
 con el corte de loop, dos de las tres explicaciones candidatas para la
 brecha de consistencia (redundancia y pérdida de contexto) quedan desestimadas.
 
-## 5. Limitaciones y próximos pasos
+## 5. Limitaciones 
 
-La limitación que más pesa es la varianza entre corridas: dos corridas
-idénticas del mismo brazo y modelo dieron 0.250 y 0.125 (diferencia no
+- La limitación que más pesa es la varianza entre corridas: dos corridas
+idénticas del mismo brazo y modelo dieron 0.250 y 0.125 en accuracy (diferencia no
 significativa), del mismo orden que los efectos que medimos. Por eso cuatro
 de los cinco experimentos no alcanzan significancia sobre nova-lite. El
 remedio sería fijar la semilla de muestreo, pero Bedrock no lo permite (lo
 verificamos); solo está disponible para Ollama.
 
-El confound de cuantización quedó acotado, no eliminado: con familia y
-cuantización fijas, pasar de 3.2B a 8B rompe el cero, así que el cero de los
-modelos chicos no era solo degradación por correr en 4 bits. Sigue sin poder
-atribuirse la brecha entre el 8B local (0.125) y nova-lite (0.792), donde
-cambian familia, entrenamiento y API a la vez.
-
-Sobre el juez: con nova-pro (distinto del agente, sobre 96 trazas con
+- Sobre el juez: con nova-pro (distinto del agente, sobre 96 trazas con
 variación real) dos de los tres criterios no llegan a una zona de acuerdo
-confiable; solo sin_redundancia_evitable, donde la referencia reparte bien,
-da un acuerdo moderado.
+confiable; solo sin_redundancia_evitable, donde la referencia discrimina bien, obtenemos un acuerdo moderado.
 
-Sin prompt caching, más de un tercio del input de una corrida se gasta
+- Sin prompt caching, más de un tercio del input de una corrida se gasta
 repitiendo el mismo system prompt en cada llamada. No lo implementamos
-porque el cliente de Bedrock es un archivo fijo del andamiaje que no expone
+porque el cliente de Bedrock es un archivo "fijo" del andamiaje (consigna) que no expone
 esa opción, y afecta por igual a todas las configuraciones.
 
-Y dos menores: el split entre desarrollo y holdout quedó desbalanceado
-porque la etiqueta "extreme" agrupa escenarios muy distintos entre sí, y el
-tope de 30 iteraciones es una decisión nuestra del harness, no del
-enunciado, para que no le ponga un techo artificial a la accuracy.
+- El tope de 30 iteraciones es una decisión nuestra del harness, no del
+enunciado, para asegurarnos que no se le ponga un techo artificial a la accuracy (aumentamos este valor respecto a entregas pasadas).
+
+## 6. Próximos pasos
 
 El próximo paso es atacar la consistencia, no la capacidad: el agente ya
-resuelve los 8 escenarios en algún intento pero solo 5 de 8 en los tres, y
-subir de modelo ya no mueve la aguja. Ya sabemos por dónde no pasa la
-solución: ni cortar loops en runtime ni ampliar la ventana de memoria
-mueven la accuracy, así que lo que queda es la calidad de la decisión en
-cada paso: rediseñar el summarizer para que el estado incluya qué se
-intentó y con qué resultado (no solo el estado alcanzado), resolver el
-criterio del juez que no acuerda aunque su referencia ya discrimine, probar
-un gate adaptativo que se prenda solo donde el espacio de identificadores es
-grande y ambiguo, sumar un planificador explícito para el escenario de
-objetivo compuesto, y eventualmente memoria episódica o semántica más allá
-de la ventana de trabajo actual.
+resuelve los 8 escenarios en algún intento pero solo 5 de 8 en las tres repeticiones. Gracias a este trabajo hemos descartado
+ 2 posibles soluciones: ni cortar loops en runtime ni ampliar la ventana de memoria
+mueven la accuracy, así que lo que queda es atacar la calidad de la decisión en
+cada paso. Creemos que una manera posible de hacerlo es rediseñar el summarizer para que el estado incluya mas detalles de qué se
+intentó y con qué resultado (no solo el estado alcanzado) y, en combinacion, podriamos a su vez sumar un "planificador" para el escenario de
+objetivo compuesto o multisalas.
+
+Además, consideramos necesario mejorar nuestro sistema de evaluación para lograr una mayor robustes. Debemos resolver los
+criterios del juez donde no se han alcanzado niveles suficiente de acuerdo.
